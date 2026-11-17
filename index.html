@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>地貌删减线 · 原型 v0.1</title>
+<style>
+  :root{
+    --ink:#e9e5db; --dim:#98a09a; --accent:#d8a24a; --line:#2a302c;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden;background:#0a0d0c;color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  #gl{position:fixed;inset:0;display:block;width:100%;height:100%}
+  .vignette{position:fixed;inset:0;pointer-events:none;
+    background:radial-gradient(120% 90% at 50% 40%,transparent 42%,rgba(0,0,0,.55) 100%)}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;
+    align-items:center;padding:16px 24px;pointer-events:none;z-index:5}
+  .brand{font-size:12.5px;letter-spacing:.16em;font-family:ui-monospace,Consolas,monospace;color:var(--accent)}
+  .brand span{color:var(--dim);letter-spacing:.04em;margin-left:10px}
+  .meta{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:var(--dim);
+    display:flex;gap:18px;letter-spacing:.05em}
+  .meta b{color:#cfc9bd;font-weight:500}
+
+  .hud{position:fixed;top:64px;left:24px;font-family:ui-monospace,Consolas,monospace;
+    font-size:11px;line-height:1.9;color:var(--dim);z-index:5;pointer-events:none}
+  .hud .k{display:inline-block;width:64px;color:#6f7773;letter-spacing:.1em}
+  .hud .v{color:#ddd6c8}
+  .hud .v.hot{color:var(--accent)}
+  .hud .bad{color:#d97a5a}
+
+  .cap{position:fixed;left:26px;bottom:96px;max-width:480px;z-index:5;pointer-events:none;
+    text-shadow:0 2px 14px rgba(0,0,0,.85),0 0 2px rgba(0,0,0,.9)}
+  .cap .yr{font-family:ui-monospace,Consolas,monospace;font-size:11px;letter-spacing:.18em;
+    color:var(--accent);margin-bottom:6px}
+  .cap .ti{font-size:26px;font-weight:600;letter-spacing:.01em;margin-bottom:6px}
+  .cap .mn{font-size:13.5px;color:#bdb7ab;margin-bottom:10px;max-width:430px;line-height:1.6}
+  .cap .alt{border-left:2px solid #6b7f6d;padding-left:11px;font-size:13px;color:#94a396;
+    opacity:0;transform:translateY(6px);transition:opacity .35s ease,transform .35s ease}
+  .cap .alt.on{opacity:1;transform:none}
+  .cap .alt i{font-style:normal;color:#6f7d71;font-family:ui-monospace,Consolas,monospace;
+    font-size:10.5px;letter-spacing:.14em;margin-right:7px}
+
+  .bar{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:8;
+    width:min(1000px,calc(100% - 36px));background:rgba(12,15,14,.9);border:1px solid var(--line);
+    border-radius:4px;padding:10px 14px;display:flex;align-items:center;gap:12px;
+    backdrop-filter:blur(8px)}
+  button{background:#171d1a;color:var(--ink);border:1px solid var(--line);border-radius:2px;
+    padding:6px 11px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap}
+  button:hover{border-color:#3d4842;background:#1c2320}
+  button.primary{border-color:#5a4a2a;background:#221b10;color:var(--accent)}
+  button:disabled{opacity:.4;cursor:default}
+  .track{position:relative;flex:1;height:26px;display:flex;align-items:center}
+  input[type=range]{width:100%;-webkit-appearance:none;background:transparent;height:26px;cursor:pointer}
+  input[type=range]::-webkit-slider-runnable-track{height:2px;background:#333b36}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:10px;height:10px;border-radius:50%;
+    background:var(--accent);margin-top:-4px;box-shadow:0 0 0 3px rgba(216,162,74,.15)}
+  .marks{position:absolute;inset:0;pointer-events:none}
+  .marks i{position:absolute;top:17px;width:1px;height:6px;background:#4c554f}
+  .marks u{position:absolute;top:11px;height:2px;background:rgba(216,162,74,.35)}
+  .tm{font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:var(--dim);min-width:96px;text-align:right}
+  .tm b{color:#d8d2c5;font-weight:500}
+
+  .panel{position:fixed;right:18px;bottom:74px;z-index:9;width:300px;
+    background:rgba(12,15,14,.96);border:1px solid var(--line);border-radius:4px;padding:14px;
+    display:none}
+  .panel.on{display:block}
+  .panel h4{font-family:ui-monospace,Consolas,monospace;font-size:10.5px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--dim);margin-bottom:10px;font-weight:500}
+  .fld{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;
+    font-size:12px;color:var(--dim)}
+  .fld input,.fld select{background:#151a18;border:1px solid var(--line);color:var(--ink);
+    border-radius:2px;padding:4px 6px;font-family:ui-monospace,Consolas,monospace;font-size:11.5px;width:96px}
+  .prog{height:2px;background:#232a26;margin:10px 0 6px;overflow:hidden}
+  .prog i{display:block;height:100%;width:0;background:var(--accent);transition:width .12s linear}
+  .note{font-size:11px;color:#6f7773;line-height:1.65;margin-top:8px}
+  .toast{position:fixed;left:50%;top:58px;transform:translateX(-50%);z-index:20;
+    background:rgba(20,26,23,.96);border:1px solid #3c4a42;border-radius:3px;
+    padding:8px 16px;font-family:ui-monospace,Consolas,monospace;font-size:11.5px;color:#bcd3bf;
+    opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.on{opacity:1}
+  .boot{position:fixed;inset:0;z-index:50;background:#0a0d0c;display:flex;align-items:center;
+    justify-content:center;flex-direction:column;gap:14px;transition:opacity .5s}
+  .boot.off{opacity:0;pointer-events:none}
+  .boot .t{font-family:ui-monospace,Consolas,monospace;font-size:11px;letter-spacing:.2em;color:var(--accent)}
+  .boot .s{font-family:ui-monospace,Consolas,monospace;font-size:11px;color:#6f7773}
+
+  /* 光点事件标签：贴在光点上方，出现数秒后淡出 */
+  .ptag{position:absolute;left:0;top:0;pointer-events:none;opacity:0;white-space:nowrap;
+    padding:3px 12px 4px;border-left:1px solid rgba(255,198,116,.95);
+    background:linear-gradient(90deg,rgba(6,12,20,.82),rgba(6,12,20,0));
+    font-family:ui-monospace,Consolas,monospace;font-size:11px;letter-spacing:.08em;
+    color:#ffd39b;text-shadow:0 1px 8px rgba(0,0,0,.95)}
+  .ptag b{margin-left:8px;font-size:13px;font-weight:600;letter-spacing:.03em;color:#fff}
+
+  /* 支线标签：贴在支线地形上方，随支线一同消失 */
+  .btag{position:absolute;left:0;top:0;pointer-events:none;opacity:0;white-space:nowrap;
+    padding:3px 12px 4px;border-right:1px solid rgba(150,228,248,.9);text-align:right;
+    background:linear-gradient(270deg,rgba(4,14,22,.84),rgba(4,14,22,0));
+    font-family:ui-monospace,Consolas,monospace;font-size:10.5px;letter-spacing:.08em;
+    color:#9fdcf0;text-shadow:0 1px 8px rgba(0,0,0,.95)}
+  .btag b{margin-left:7px;font-size:12px;font-weight:600;letter-spacing:.02em;color:#eafcff}
+  .btag em{display:block;margin-top:2px;font-style:normal;font-size:10px;letter-spacing:.06em;color:rgba(150,225,245,.62)}
+  body.nocap .ptag, body.nocap .btag{display:none !important}
+
+  /* 嵌入模式：盲测用，隐藏全部界面，只留画面 */
+  body.embed .top, body.embed .hud, body.embed .bar, body.embed .panel, body.embed .toast{display:none !important}
+  body.embed .boot{display:none !important}
+  body.embed .cap{bottom:34px}
+  body.embed.nocap .cap{display:none !important}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div class="vignette"></div>
+
+<div class="top">
+  <div class="brand">地貌删减线 / PROTOTYPE v0.1 <span>乔布斯 · 8 节点 · 6 分叉</span></div>
+  <div class="meta">
+    <span>SEED <b id="mSeed">jobs-1985</b></span>
+    <span>FPS <b id="mFps">30</b></span>
+    <span>LEN <b id="mLen">96.0s</b></span>
+    <span>FRAMES <b id="mFrames">2880</b></span>
+  </div>
+</div>
+
+<div class="hud">
+  <div><span class="k">NODE</span><span class="v" id="hudNode">—</span></div>
+  <div><span class="k">PHASE</span><span class="v" id="hudPhase">—</span></div>
+  <div><span class="k">CAMERA</span><span class="v" id="hudCam">—</span></div>
+  <div><span class="k">SCARS</span><span class="v" id="hudScar">0 / 6</span></div>
+  <div><span class="k">VALUE</span><span class="v" id="hudValue">100</span></div>
+  <div><span class="k">GROUND</span><span class="v" id="hudClear">—</span></div>
+  <div><span class="k">MIN CLR</span><span class="v" id="hudMin">—</span></div>
+</div>
+
+<div class="ptag" id="ptag"><span id="ptagYear"></span><b id="ptagTitle"></b></div>
+<div class="btag" id="btag"><span>未走</span><b id="btagText"></b><em id="btagMeta"></em></div>
+
+<div class="cap">
+  <div class="yr" id="capYear">—</div>
+  <div class="ti" id="capTitle">—</div>
+  <div class="mn" id="capMain">—</div>
+  <div class="alt" id="capAlt"><i>未走</i><span id="capAltText"></span></div>
+</div>
+
+<div class="bar">
+  <button id="btnPlay" title="空格">▶ 播放</button>
+  <div class="track">
+    <canvas id="lifeCurve" width="1200" height="64" style="position:absolute;left:0;bottom:100%;width:100%;height:38px;pointer-events:none;opacity:0.72;margin-bottom:6px"></canvas>
+    <div class="marks" id="marks"></div>
+    <input id="scrub" type="range" min="0" max="2879" value="0" step="1">
+  </div>
+  <div class="tm"><b id="tNow">00:00.0</b> / <span id="tEnd">01:36.0</span></div>
+  <button id="btnCheck">校验本帧</button>
+  <button id="btnMusic">♪ 音乐 开</button>
+  <button id="btnExport" class="primary">导出区间</button>
+</div>
+<audio id="bgm" src="assets/bgm.mp3" preload="auto" loop></audio>
+
+<div class="panel" id="panel">
+  <h4>Frame Export · 逐帧导出</h4>
+  <div class="fld"><span>起始秒</span><input id="exStart" type="number" value="0" min="0" step="1"></div>
+  <div class="fld"><span>结束秒</span><input id="exEnd" type="number" value="12" min="1" step="1"></div>
+  <div class="fld"><span>分辨率</span>
+    <select id="exRes">
+      <option value="1280x720">1280 × 720</option>
+      <option value="960x540">960 × 540</option>
+      <option value="1920x1080">1920 × 1080</option>
+    </select>
+  </div>
+  <div class="fld"><span>格式</span>
+    <select id="exFmt"><option value="image/jpeg">JPEG</option><option value="image/png">PNG</option></select>
+  </div>
+  <div class="prog"><i id="progBar"></i></div>
+  <div class="note" id="exNote">帧号驱动，固定种子。导出为 ZIP 图片序列，可直接交给 ffmpeg 合成。</div>
+  <div style="display:flex;gap:8px;margin-top:10px">
+    <button id="btnRun" class="primary" style="flex:1">开始导出</button>
+    <button id="btnClose">关闭</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="boot" id="boot">
+  <div class="t">COMPILING TERRAIN</div>
+  <div class="s" id="bootS">读取节点 · 生成高度场</div>
+</div>
+
+<script src="assets/three.min.js"></script>
+<script>
+"use strict";
+
+/* ============================================================
+   0. 工具
+   ============================================================ */
+const clamp = (v,a,b)=> v<a?a:(v>b?b:v);
+const lerp  = (a,b,u)=> a+(b-a)*u;
+const smooth = (e0,e1,x)=>{ const t=clamp((x-e0)/(e1-e0),0,1); return t*t*(3-2*t); };
+
+/* ============================================================
+   1. 人物资料库（L1）— 已锁定节点
+   ============================================================ */
+const FILM = {
+  person:"P-JOBS", seed:"jobs-1985", fps:30, nodeDuration:10, outro:8,
+  nodes:[
+    {id:"N01",year:1972,age:17,title:"入读里德学院",
+     main:"离开硅谷，进入俄勒冈的里德学院",
+     alt:"留在加州读州立大学，按部就班毕业",
+     terrain:"坦途", mode:"被覆盖", scar:1, side: 1, archetype:"被驯化型", delta:-8, lock:true},
+    {id:"N02",year:1973,age:18,title:"退学，旁听书法",
+     main:"退学但留在学校，以旁听生身份修书法课",
+     alt:"拿到学位，进入大公司做稳定工程师",
+     terrain:"坦途", mode:"雾化", scar:2, side:-1, archetype:"被驯化型", delta:-12, lock:true},
+    {id:"N03",year:1974,age:19,title:"印度之行",
+     main:"赴印度寻访灵修，回来后清空了自己",
+     alt:"留在游戏公司做技术员，攒钱读研",
+     terrain:"未知", mode:"风沙", scar:2, side: 1, archetype:"侥幸型", delta:6, lock:true},
+    {id:"N04",year:1976,age:21,title:"车库里的苹果",
+     main:"卖车与计算器凑钱，与沃兹尼亚克创办苹果",
+     alt:"留在大公司，做一份稳定的工程师工作",
+     terrain:"坦途", mode:"塌陷", scar:3, side:-1, archetype:"逃离型", delta:18, lock:true},
+    {id:"N05",year:1984,age:29,title:"Macintosh 发布",
+     main:"押注图形界面，把电脑做成给普通人用的工具",
+     alt:"转入企业产品线，走大客户与规格竞争路线",
+     terrain:"未知", mode:"雾化", scar:2, side: 1, archetype:"侥幸型", delta:34, lock:true},
+    {id:"N06",year:1985,age:30,title:"被逐出苹果",
+     main:"辞去职务，带五人小组创办 NeXT",
+     alt:"接受降职，交出部门控制权，留在苹果",
+     terrain:"险路", mode:"塌陷", scar:3, side:-1, archetype:"逃离型", delta:-60, lock:true},
+    {id:"N07",year:1986,age:31,title:"买下图形部门",
+     main:"从卢卡斯影业买下计算机图形部门，独立为 Pixar",
+     alt:"拒绝这笔烧钱交易，全部资源押在 NeXT",
+     terrain:"险路", mode:"风沙", scar:3, side: 1, archetype:"迟到的回头", delta:-4, lock:true},
+    {id:"N08",year:1996,age:41,title:"回归苹果",
+     main:"NeXT 被苹果收购，以顾问身份回归，随后出任临时 CEO",
+     alt:"留在 NeXT 与 Pixar，不再回到那家公司",
+     terrain:"未知", mode:"被覆盖", scar:3, side:-1, archetype:"迟到的回头", delta:78, lock:true}
+  ]
+};
+
+/* L2：语义 → 参数的固定方向（06.2） */
+const TERRAIN_RULES = {
+  "坦途": { lift: 10.5, width: 11.5, turn:  1.6, turnW: 16, crag: 0.55, flat:true },
+  "险路": { lift: 19.0, width:  6.0, turn: -9.0, turnW:  6, crag: 1.45, flat:false },
+  "未知": { lift: 13.0, width:  8.2, turn: -3.4, turnW:  9, crag: 1.05, flat:false }
+};
+const VISH_DUR = { "雾化":3.0, "风沙":3.0, "塌陷":2.5, "被覆盖":4.0 };
+const VISH_IDX = { "雾化":0, "风沙":1, "塌陷":2, "被覆盖":3 };
+const SCAR_OPACITY = { 1:0.10, 2:0.16, 3:0.24 };
+
+/* ============================================================
+   2. 噪声与高度场（种子派生，纯函数）
+   ============================================================ */
+let SEED_INT = 0;
+function seedFrom(str){ let h=2166136261; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619);} return h>>>0; }
+function hash2(ix,iy){
+  let h = Math.imul(ix,374761393) ^ Math.imul(iy,668265263) ^ Math.imul(SEED_INT,1442695041);
+  h = Math.imul(h ^ (h>>>13), 1274126177);
+  return ((h ^ (h>>>16))>>>0) / 4294967295;
+}
+function vnoise(x,y){
+  const ix=Math.floor(x), iy=Math.floor(y), fx=x-ix, fy=y-iy;
+  const u=fx*fx*(3-2*fx), v=fy*fy*(3-2*fy);
+  const a=hash2(ix,iy), b=hash2(ix+1,iy), c=hash2(ix,iy+1), d=hash2(ix+1,iy+1);
+  return lerp(lerp(a,b,u), lerp(c,d,u), v);
+}
+function fbm(x,y,oct){
+  oct = oct||4; let s=0,a=0.5,f=1;
+  for(let i=0;i<oct;i++){ s += a*vnoise(x*f, y*f); f*=2.03; a*=0.5; }
+  return s;
+}
+const spineZ = x => 9*Math.sin(x*0.016) + 3.2*Math.sin(x*0.055+1.3);
+
+/* 人生数值：起点 100，每个节点累加 delta，地形高度直接由该数值映射 */
+const V_BASE = 100, V_MIN = 74, V_SPAN = 66;
+const valueNorm = v => clamp((v - V_MIN)/V_SPAN, 0, 1);
+
+/* 人生势能曲线：地形高低 = 这一段的顺逆，等价于 K 线的收盘价 */
+function lifeLevel(x){
+  const N = FILM.nodes;
+  const val = i => valueNorm(N[i].value == null ? V_BASE : N[i].value);
+  if(x <= N[0].x) return val(0);
+  for(let i=0;i<N.length-1;i++){
+    if(x <= N[i+1].x){
+      const u = (x - N[i].x) / (N[i+1].x - N[i].x);
+      return lerp(val(i), val(i+1), u*u*(3-2*u));
+    }
+  }
+  return val(N.length-1);
+}
+
+/* 节点几何位置与地形参数 */
+FILM.nodes.forEach((n,i)=>{
+  n.x = 20 + i*40;
+  n.z = spineZ(n.x);
+  n.branchLen = 34;
+  n.side = 1;              // 原型：支线统一朝向相机一侧，避免机位跨越山脊
+  // v1.0 字段：分叉机位 / 存续时长 / 疤痕预设（未显式给出的走默认）
+  n.fork_camera = n.fork_camera || ["side-pull","high-oblique","cross-look"][i % 3];
+  n.duration = n.duration || (n.scar >= 3 ? 2.7 : 2.4);
+  n.scar_preset = n.scar_preset || "pale-decal";
+  const r = TERRAIN_RULES[n.terrain];
+  n.lift = r.lift; n.bw = r.width; n.turnAmp = r.turn; n.turnW = r.turnW;
+  n.crag = r.crag; n.flat = r.flat;
+});
+
+function heightAt(x,z){
+  const zs = spineZ(x);
+  const d  = Math.abs(z-zs);
+  const crest = Math.exp(-(d*d)/(2*30*30));
+  let h = -3.2 + 5.0*fbm(x*0.028, z*0.028);
+  // 主脊高度由人生势能驱动：谷底 4.5，峰顶 34.5，落差 30
+  h += (3.0 + 46.0*lifeLevel(x) + 7.0*fbm(x*0.017+11, 3.7)) * crest;
+  h += 3.0*Math.pow(fbm(x*0.12+4.2, z*0.12-2.1), 2.0);
+  h += 1.5*Math.pow(fbm(x*0.34-6.1, z*0.34+3.3), 2.2);
+  for(let i=0;i<FILM.nodes.length;i++){
+    const n = FILM.nodes[i];
+    const dx = x-n.x;
+    const g = Math.exp(-(dx*dx)/(2*n.turnW*n.turnW)) * crest;
+    h += n.turnAmp * g * n.crag;
+  }
+  return h;
+}
+
+/* 支线剖面：局部二分，边界 falloff 归零 */
+function branchShape(n, x, z){
+  const dz = (z - n.z) * n.side;
+  const L  = n.branchLen;
+  if(dz <= 0 || dz >= L) return {lift:0, fall:0};
+  const cx = n.x + Math.sin(dz*0.09)*5.2;
+  const lat = x - cx;
+  let prof, along;
+  if(n.flat){
+    // 坦途：平顶台地。坡度低，但侧壁立起来，低机位下才能从主脊轮廓里分出来
+    const k = clamp(1 - (lat*lat)/(n.bw*n.bw), 0, 1);
+    prof = Math.pow(k, 0.5);
+    along = smooth(0, 3.2, dz) * smooth(L, L-3.5, dz);
+  } else {
+    prof = Math.exp(-(lat*lat)/(2*n.bw*n.bw));
+    along = smooth(0,5.5,dz) * smooth(L, L-9, dz);
+  }
+  const fall = prof*along;
+  let lift = n.lift * fall;
+  if(n.terrain === "险路") lift *= 0.80 + 0.42*fbm(x*0.55, z*0.45);
+  if(n.terrain === "未知") lift *= 0.72 + 0.55*fbm(x*0.33+7, z*0.30);
+  return {lift, fall};
+}
+
+/* 任意时刻的可见地表：主线 + 当时存活的支线 */
+function surfaceAt(x, z, t, nodes){
+  const base = heightAt(x, z);
+  let h = base;
+  for(let i=0;i<nodes.length;i++){
+    const n = nodes[i];
+    if(t < n.begin || t >= n.commit) continue;
+    const s = branchShape(n, x, z);
+    if(s.fall > 0.02){
+      const bh = base + s.lift + 0.3;
+      if(bh > h) h = bh;
+    }
+  }
+  return h;
+}
+
+/* 编译期清障：沿整条相机路径采样，抬高关键帧直到全程不穿地表 */
+function enforceClearance(keys, nodes){
+  const MIN = 6;
+  for(let pass=0; pass<5; pass++){
+    let worst = 0;
+    for(let i=0;i<keys.length-1;i++){
+      const a = keys[i], b = keys[i+1];
+      const span = b.t - a.t;
+      if(span <= 0.001) continue;
+      const steps = Math.max(3, Math.ceil(span/0.1));
+      let deficit = 0;
+      for(let s=0;s<=steps;s++){
+        const q = s/steps, u = q*q*(3-2*q);
+        const x = lerp(a.p[0], b.p[0], u);
+        const y = lerp(a.p[1], b.p[1], u);
+        const z = lerp(a.p[2], b.p[2], u);
+        const tt = lerp(a.t, b.t, q);
+        const need = surfaceAt(x, z, tt, nodes) + MIN;
+        if(need - y > deficit) deficit = need - y;
+      }
+      if(deficit > 0.15){
+        a.p[1] += deficit;
+        b.p[1] += deficit;
+        if(deficit > worst) worst = deficit;
+      }
+    }
+    if(worst === 0) break;
+  }
+}
+
+/* 全片最小离地间隙，用于编译报告 */
+function minClearance(keys, nodes){
+  let min = Infinity;
+  for(let i=0;i<keys.length-1;i++){
+    const a = keys[i], b = keys[i+1];
+    const steps = Math.max(3, Math.ceil((b.t-a.t)/0.1));
+    for(let s=0;s<=steps;s++){
+      const q = s/steps, u = q*q*(3-2*q);
+      const x = lerp(a.p[0], b.p[0], u);
+      const y = lerp(a.p[1], b.p[1], u);
+      const z = lerp(a.p[2], b.p[2], u);
+      const tt = lerp(a.t, b.t, q);
+      const c = y - surfaceAt(x, z, tt, nodes);
+      if(c < min) min = c;
+    }
+  }
+  return min;
+}
+
+/* ============================================================
+   3. 编排层（L3）：编译时间轴
+   ============================================================ */
+function compile(film){
+  // 校验（08 异常表）
+  const errors = [];
+  film.nodes.forEach(n=>{
+    if(!n.lock) errors.push(n.id+" 未锁定");
+    ["title","main","alt","terrain","mode"].forEach(k=>{ if(!n[k]) errors.push(n.id+" 缺少 "+k); });
+    if(!(n.terrain in TERRAIN_RULES)) errors.push(n.id+" alternate_terrain 非法");
+    if(!(n.mode in VISH_DUR)) errors.push(n.id+" disappearance_mode 非法");
+    if(n.alt && n.alt.length > 32) errors.push(n.id+" alternate_path 超过 32 字");
+  });
+  if(errors.length) return {ok:false, errors};
+
+  // 数值链：100 起，逐个节点累加 delta
+  let acc = V_BASE;
+  film.nodes.forEach(n=>{ acc += n.delta; n.value = acc; });
+
+  const nodes = film.nodes.map((n,i)=>{
+    const start = i*film.nodeDuration;
+    const begin = start + 2.5;          // fork_begin
+    const appear = 0.7;
+    const live = n.duration;
+    const dur = VISH_DUR[n.mode];
+    const endLive = begin + appear + live;
+    const commit = endLive + dur;       // scar_commit
+    return Object.assign({}, n, {start, begin, appear, live, dur, endLive, commit});
+  });
+
+  // 相机关键帧：主线样条 + 每个分叉的预设计机位（编译期固定）
+  const FORK_CAM = {
+    "side-pull":   (n)=> [[n.x+76, n.z+44], [n.x-12, n.z+8]],
+    "high-oblique":(n)=> [[n.x-76, n.z+42], [n.x+10, n.z+10]],
+    "cross-look":  (n)=> [[n.x-64, n.z+36], [n.x+8, n.z+6]],
+    // 巨变节点（|delta| ≥ 40）：站在跌落的起点，俯看整段落差
+    "plunge":      (n)=> [[n.x-52, n.z+62], [n.x+26, n.z+2]]
+  };
+  // 机位高度一律相对当地地表，而不是绝对高度：峰顶和谷底得到同样的低角度压迫感
+  // 机位坐标必须落在地图内部，否则末端节点会拍到边界外的空白
+  const CX = v => clamp(v, 26, 272);
+  const CZ = v => clamp(v, -66, 66);
+  const P = (px, pz, rel)=> [CX(px), heightAt(CX(px), CZ(pz)) + rel, CZ(pz)];
+  const Q = (px, pz, dy)=> [CX(px), heightAt(CX(px), CZ(pz)) + (dy == null ? 3.0 : dy), CZ(pz)];
+  const keys = [];
+  nodes.forEach(n=>{
+    keys.push({t:n.start+0.2, p:P(n.x-58, n.z+72, 12), q:Q(n.x+10, n.z)});
+    keys.push({t:n.begin-0.3, p:P(n.x-32, n.z+60, 11), q:Q(n.x+8, n.z)});
+    if(n.alt){
+      const preset = Math.abs(n.delta) >= 40 ? "plunge" : (FORK_CAM[n.fork_camera] ? n.fork_camera : "side-pull");
+      const cam = FORK_CAM[preset](n);
+      const rel = preset === "plunge" ? 30 : 12;
+      keys.push({t:n.begin+1.0, p:P(cam[0][0], cam[0][1], rel), q:Q(cam[1][0], cam[1][1], 4.0), fov:40});
+    }
+    keys.push({t:n.start+8.0, p:P(n.x+26, n.z+56, 12), q:Q(n.x+38, n.z+4)});
+  });
+  // 结尾拉远：疤痕连成根系（v1.0 2.4）
+  const lastX = nodes[nodes.length-1].x;
+  const outroStart = nodes[nodes.length-1].start + film.nodeDuration;
+  keys.push({t:outroStart+1.0, p:[lastX-18, 80, 190], q:Q(150, 10, 4.0), fov:50});
+  keys.push({t:outroStart+film.outro, p:[150, 150, 300], q:[150, 2, 0], fov:54});
+  // 清障：按整条路径采样，抬到主线与支线之上
+  keys.forEach(k=>{ k.p[1] = Math.max(k.p[1], heightAt(k.p[0], k.p[2]) + 6); });
+  keys.sort((a,b)=>a.t-b.t);
+  enforceClearance(keys, nodes);
+  const clearance = minClearance(keys, nodes);
+
+  return {
+    ok:true, nodes, keys,
+    duration: nodes[nodes.length-1].start + film.nodeDuration + film.outro,
+    outroStart,
+    minClearance: clearance,
+    fps: film.fps, seed: film.seed, person: film.person
+  };
+}
+
+/* ============================================================
+   4. 渲染引擎（L4）
+   ============================================================ */
+const canvas = document.getElementById("gl");
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
+renderer.setSize(window.innerWidth, window.innerHeight, false);
+renderer.setClearColor(0x050912, 1);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(46, window.innerWidth/window.innerHeight, 0.4, 2400);
+
+/* ---- 4.0 天穹：给山脊一个可以浮出来的背景，而不是纯黑 ---- */
+const skyMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(700, 32, 20),
+  new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite:false,
+    vertexShader:`varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+    fragmentShader:`precision highp float; varying vec3 vP;
+      void main(){
+        vec3 d = normalize(vP);
+        vec3 top = vec3(0.010,0.018,0.036);
+        vec3 hor = vec3(0.030,0.058,0.095);
+        vec3 col = mix(hor, top, smoothstep(-0.20, 1.05, d.y));
+        float glow = pow(max(dot(normalize(vec3(d.x,0.0,d.z)), normalize(vec3(-0.32,0.0,-1.0))),0.0), 7.0);
+        col += vec3(0.045,0.035,0.090) * glow * smoothstep(0.30,-0.04,d.y);
+        gl_FragColor = vec4(col,1.0);
+      }`
+  })
+);
+skyMesh.renderOrder = -1;
+scene.add(skyMesh);
+
+const FOG_COL = new THREE.Color(0x0a1626);
+
+/* ---- 4.0 主线光点：贴地推行的唯一发亮河道 ---- */
+const GLOW_TEX = (()=>{
+  const c = document.createElement("canvas"); c.width = c.height = 64;
+  const g = c.getContext("2d");
+  const grd = g.createRadialGradient(32,32,0, 32,32,32);
+  grd.addColorStop(0, "rgba(255,246,225,1)");
+  grd.addColorStop(0.25,"rgba(255,214,150,0.85)");
+  grd.addColorStop(0.6, "rgba(216,162,74,0.22)");
+  grd.addColorStop(1,   "rgba(216,162,74,0)");
+  g.fillStyle = grd; g.fillRect(0,0,64,64);
+  const tex = new THREE.CanvasTexture(c);
+  return tex;
+})();
+
+const LIGHT = (()=>{
+  const pts = [];
+  for(let x=20; x<=300.001; x+=0.5){
+    const z = spineZ(x);
+    pts.push(new THREE.Vector3(x, heightAt(x,z)+1.15, z));
+  }
+  const cum = [0];
+  for(let i=0;i<pts.length-1;i++){
+    const a=pts[i], b=pts[i+1];
+    const ds = Math.hypot(b.x-a.x, b.z-a.z) || 1e-6;
+    const slope = Math.abs(b.y-a.y)/ds;
+    cum.push(cum[i] + ds*(1 + 4.0*Math.min(slope,1.0)));   // 越陡越贵 = 越慢
+  }
+  const total = cum[cum.length-1];
+  for(let i=0;i<cum.length;i++) cum[i] /= total;
+
+  // POV 眼睛高度：先取「地面 + 2.05」，再做带权滑动平均。
+  // 直接用地表高度会让 45 单位的落差原样变成颠簸，平滑后才是稳定的贴地飞行。
+  const rawEye = pts.map(p => p.y + 2.05);
+  const R = 26;
+  const eye = rawEye.map((_, i)=>{
+    let sum = 0, wsum = 0;
+    for(let k=-R;k<=R;k++){
+      const j = clamp(i + k, 0, rawEye.length - 1);
+      const w = 1 - Math.abs(k)/(R + 1);
+      sum += rawEye[j]*w; wsum += w;
+    }
+    return Math.max(sum/wsum, pts[i].y + 1.0);
+  });
+  return {pts, cum, eye};
+})();
+
+/* 光路：一条贴着地形的发光绸带，尾部衰减，头部最亮 */
+const RIBBON = (()=>{
+  const pts = LIGHT.pts, N = pts.length;
+  const pos = new Float32Array(N*2*3);
+  const aT = new Float32Array(N*2);
+  const aSide = new Float32Array(N*2);
+  for(let i=0;i<N;i++){
+    const p = pts[i];
+    const a = pts[Math.max(0,i-1)], b = pts[Math.min(N-1,i+1)];
+    let dx = b.x-a.x, dz = b.z-a.z;
+    const len = Math.hypot(dx,dz) || 1e-6; dx/=len; dz/=len;
+    const nx = -dz, nz = dx, w = 2.2;
+    const y = p.y - 0.55;
+    pos[i*6+0]=p.x+nx*w; pos[i*6+1]=y; pos[i*6+2]=p.z+nz*w;
+    pos[i*6+3]=p.x-nx*w; pos[i*6+4]=y; pos[i*6+5]=p.z-nz*w;
+    aT[i*2]=aT[i*2+1]=i/(N-1);
+    aSide[i*2]=1; aSide[i*2+1]=-1;
+  }
+  const idx = [];
+  for(let i=0;i<N-1;i++){ const k=i*2; idx.push(k,k+1,k+2, k+1,k+3,k+2); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos,3));
+  g.setAttribute("aT", new THREE.BufferAttribute(aT,1));
+  g.setAttribute("aSide", new THREE.BufferAttribute(aSide,1));
+  g.setIndex(idx);
+  const m = new THREE.ShaderMaterial({
+    uniforms:{ uHeadT:{value:0}, uPulse:{value:0}, uTime:{value:0} },
+    transparent:true, depthWrite:false, blending:THREE.AdditiveBlending,
+    side:THREE.DoubleSide,
+    vertexShader:`attribute float aT; attribute float aSide; varying float vT; varying float vS;
+      void main(){ vT=aT; vS=aSide; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+    fragmentShader:`precision highp float; varying float vT; varying float vS;
+      uniform float uHeadT; uniform float uPulse; uniform float uTime;
+      void main(){
+        float d = uHeadT - vT;
+        if(d < -0.0015) discard;
+        float tail = exp(-max(d,0.0)*22.0);
+        float edge = smoothstep(1.0, 0.18, abs(vS));
+        float head = smoothstep(0.0, 0.05, d);
+        float shimmer = 0.55 + 0.45*sin(vT*185.0 - uTime*5.5);
+        vec3 col = mix(vec3(0.95,0.60,0.24), vec3(1.0,0.86,0.58), head);
+        float a = (0.16 + 0.07*shimmer + 0.62*tail + 0.48*head*head) * edge * (1.0 + uPulse*0.05);
+        gl_FragColor = vec4(col*a, a);
+      }`
+  });
+  const mesh = new THREE.Mesh(g, m);
+  mesh.frustumCulled = false;
+  return {mesh, mat:m};
+})();
+
+const lightHead = new THREE.Sprite(new THREE.SpriteMaterial({
+  map:GLOW_TEX, color:0xffb45c, transparent:true, opacity:0.6,
+  blending:THREE.AdditiveBlending, depthWrite:false, depthTest:false
+}));
+lightHead.scale.set(11,11,1);
+
+const lightCore = new THREE.Sprite(new THREE.SpriteMaterial({
+  map:GLOW_TEX, color:0xfff4dc, transparent:true, opacity:0.95,
+  blending:THREE.AdditiveBlending, depthWrite:false, depthTest:false
+}));
+lightCore.scale.set(3.2,3.2,1);
+
+scene.add(RIBBON.mesh); scene.add(lightHead); scene.add(lightCore);
+
+/* ---- 4.0b 悬浮粉尘：整片空间的数据尘埃，随 uTime 上升、闪烁 ---- */
+const DUST = (()=>{
+  const COUNT = 1400;
+  const pos = new Float32Array(COUNT*3), seed = new Float32Array(COUNT);
+  let s = 20260117;
+  const rnd = ()=>{ s = (s*1664525 + 1013904223) >>> 0; return s/4294967296; };
+  for(let i=0;i<COUNT;i++){
+    pos[i*3]   = rnd()*330;
+    pos[i*3+1] = rnd()*46 - 4;
+    pos[i*3+2] = (rnd()-0.5)*130;
+    seed[i]    = rnd();
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos,3));
+  g.setAttribute("aSeed", new THREE.BufferAttribute(seed,1));
+  const m = new THREE.ShaderMaterial({
+    uniforms:{ uTime:{value:0} },
+    transparent:true, depthWrite:false, blending:THREE.AdditiveBlending,
+    vertexShader:`
+      attribute float aSeed; varying float vA; uniform float uTime;
+      void main(){
+        vec3 p = position;
+        p.y = mod(p.y + uTime*0.55 + aSeed*46.0, 50.0) - 4.0;
+        p.x += sin(uTime*0.28 + aSeed*31.0) * 1.6;
+        p.z += cos(uTime*0.22 + aSeed*17.0) * 1.2;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_PointSize = (1.6 + aSeed*2.8) * (150.0 / max(-mv.z, 1.0));
+        vA = 0.18 + 0.62*pow(0.5 + 0.5*sin(uTime*1.6 + aSeed*20.0), 3.0);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader:`
+      precision highp float; varying float vA;
+      void main(){
+        float r = length(gl_PointCoord - 0.5);
+        if(r > 0.5) discard;
+        float a = vA * (1.0 - r*2.0);
+        gl_FragColor = vec4(vec3(0.55,0.90,1.0) * a, a);
+      }`
+  });
+  const pts = new THREE.Points(g, m);
+  pts.frustumCulled = false;
+  return {pts, mat:m};
+})();
+scene.add(DUST.pts);
+
+/* ---- 4.0c 光点周围的金色火星：绕头部旋转上升 ---- */
+const SPARKS = (()=>{
+  const COUNT = 220;
+  const pos = new Float32Array(COUNT*3), seed = new Float32Array(COUNT);
+  let s = 777001;
+  const rnd = ()=>{ s = (s*1664525 + 1013904223) >>> 0; return s/4294967296; };
+  for(let i=0;i<COUNT;i++){
+    const th = rnd()*Math.PI*2, rr = 1.1 + rnd()*3.6;
+    pos[i*3]   = Math.cos(th)*rr;
+    pos[i*3+1] = (rnd()-0.5)*2.6;
+    pos[i*3+2] = Math.sin(th)*rr;
+    seed[i]    = rnd();
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos,3));
+  g.setAttribute("aSeed", new THREE.BufferAttribute(seed,1));
+  const m = new THREE.ShaderMaterial({
+    uniforms:{ uTime:{value:0}, uHead:{value:new THREE.Vector3(0,-999,0)} },
+    transparent:true, depthWrite:false, blending:THREE.AdditiveBlending,
+    vertexShader:`
+      attribute float aSeed; varying float vA;
+      uniform float uTime; uniform vec3 uHead;
+      void main(){
+        vec3 p = position;
+        float a = uTime*1.5 + aSeed*6.2832;
+        float c = cos(a), sn = sin(a);
+        p.xz = mat2(c, -sn, sn, c) * p.xz;
+        p.y += sin(uTime*2.4 + aSeed*9.0) * 1.1;
+        p += uHead;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_PointSize = (1.6 + aSeed*2.0) * (95.0 / max(-mv.z, 1.0));
+        vA = 0.25 + 0.65*pow(0.5 + 0.5*sin(uTime*3.1 + aSeed*24.0), 2.0);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader:`
+      precision highp float; varying float vA;
+      void main(){
+        float r = length(gl_PointCoord - 0.5);
+        if(r > 0.5) discard;
+        float a = vA * (1.0 - r*2.0);
+        gl_FragColor = vec4(vec3(1.0,0.74,0.36) * a, a);
+      }`
+  });
+  const pts = new THREE.Points(g, m);
+  pts.frustumCulled = false;
+  return {pts, mat:m};
+})();
+scene.add(SPARKS.pts);
+
+/* ---- 4.1 主线地形 ---- */
+const MAIN_VERT = `
+  varying vec3 vW; varying vec3 vN;
+  void main(){
+    vec4 wp = modelMatrix * vec4(position,1.0);
+    vW = wp.xyz;
+    vN = normalize(mat3(modelMatrix) * normal);
+    gl_Position = projectionMatrix * viewMatrix * wp;
+  }
+`;
+const MAIN_FRAG = `
+  precision highp float;
+  varying vec3 vW; varying vec3 vN;
+  uniform vec3 uFog; uniform float uFogNear, uFogFar;
+  uniform vec3 uHead; uniform float uTime;
+  void main(){
+    vec3 n = normalize(vN);
+    vec3 V = normalize(cameraPosition - vW);
+    float l1 = max(dot(n, normalize(vec3(-0.38,0.92,0.24))), 0.0);
+    float l2 = max(dot(n, normalize(vec3( 0.62,0.30,-0.58))), 0.0);
+    vec3 low  = vec3(0.012,0.026,0.046);
+    vec3 high = vec3(0.032,0.095,0.122);
+    vec3 col = mix(low, high, smoothstep(-10.0, 30.0, vW.y));
+    col *= 0.24 + 1.05*l1 + 0.18*l2;
+    float slope = 1.0 - n.y;
+    // 陡坡偏冷紫，像合金岩壁
+    col = mix(col, vec3(0.055,0.020,0.075), smoothstep(0.30,0.82,slope)*0.9);
+    // 等高线：青色能量环
+    float c = fract(vW.y * 0.55);
+    float line = smoothstep(0.455, 0.499, abs(c-0.5));
+    col = mix(col, vec3(0.010,0.040,0.055), line*0.88);
+    col += vec3(0.06,0.62,0.78) * line * 0.42 * (0.28 + 0.72*l1);
+    // 向上扫描的能量脉冲
+    float scan = sin(vW.y*0.55 - uTime*2.0);
+    col += vec3(0.05,0.34,0.42) * smoothstep(0.965, 1.0, scan) * 0.55;
+    // 世界坐标网格，远处淡出避免摩尔纹
+    float dcam = length(cameraPosition - vW);
+    float gx = abs(fract(vW.x*0.08) - 0.5);
+    float gz = abs(fract(vW.z*0.08) - 0.5);
+    float grid = smoothstep(0.482, 0.499, max(gx, gz)) * (1.0 - smoothstep(90.0, 240.0, dcam));
+    col += vec3(0.03,0.20,0.26) * grid * 0.55;
+    // 山脊轮廓光：冷青
+    float fres = pow(1.0 - max(dot(n, V), 0.0), 3.0);
+    col += vec3(0.08,0.46,0.58) * fres * 0.75;
+    // 光点照亮周边地表（暖光压在冷色地貌上）
+    float dl = distance(vW, uHead);
+    col += vec3(1.00,0.72,0.36) * exp(-dl*dl/70.0) * 0.45;
+    col += vec3(0.85,0.50,0.18) * exp(-dl/26.0) * 0.10;
+    // 低处压暗，拉开纵深
+    col *= mix(0.78, 1.0, smoothstep(-8.0, 14.0, vW.y));
+    col = mix(col, uFog, smoothstep(uFogNear, uFogFar, dcam));
+    // 地貌边缘淡出，拉远时不露出矩形边界
+    float edge = smoothstep(150.0, 184.0, abs(vW.x-150.0)) + smoothstep(78.0, 103.0, abs(vW.z));
+    col = mix(col, uFog, clamp(edge, 0.0, 1.0));
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+const mainMat = new THREE.ShaderMaterial({
+  uniforms:{
+    uFog:{value:FOG_COL}, uFogNear:{value:130}, uFogFar:{value:600},
+    uHead:{value:new THREE.Vector3(0,-999,0)}, uTime:{value:0}
+  },
+  vertexShader:MAIN_VERT, fragmentShader:MAIN_FRAG
+});
+
+const mainGeo = new THREE.PlaneGeometry(380, 210, 300, 170);
+mainGeo.rotateX(-Math.PI/2);
+mainGeo.translate(150, 0, 0);
+{
+  const pos = mainGeo.attributes.position;
+  for(let i=0;i<pos.count;i++){
+    const x = pos.getX(i), z = pos.getZ(i);
+    pos.setY(i, heightAt(x,z));
+  }
+  mainGeo.computeVertexNormals();
+}
+const mainMesh = new THREE.Mesh(mainGeo, mainMat);
+mainMesh.frustumCulled = false;
+scene.add(mainMesh);
+
+/* ---- 4.2 支线（局部二分）+ 消失 ---- */
+const BRANCH_VERT = `
+  attribute float aFall;
+  varying vec3 vW; varying vec3 vN; varying float vFall; varying vec2 vUv;
+  uniform float uDissolve; uniform int uMode;
+  void main(){
+    vec3 p = position;
+    if(uMode == 2){ p.y -= uDissolve * 13.0 * clamp(aFall*2.0, 0.0, 1.0); }
+    vec4 wp = modelMatrix * vec4(p,1.0);
+    vW = wp.xyz; vFall = aFall; vUv = uv;
+    vN = normalize(mat3(modelMatrix) * normal);
+    gl_Position = projectionMatrix * viewMatrix * wp;
+  }
+`;
+const BRANCH_FRAG = `
+  precision highp float;
+  varying vec3 vW; varying vec3 vN; varying float vFall; varying vec2 vUv;
+  uniform float uDissolve; uniform int uMode; uniform vec3 uFog; uniform float uFogNear, uFogFar;
+  uniform vec3 uHead;
+  uniform float uAppear;
+  float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
+  void main(){
+    if(vFall < 0.09) discard;
+    vec3 n = normalize(vN);
+    vec3 V = normalize(cameraPosition - vW);
+    float l1 = max(dot(n, normalize(vec3(-0.38,0.92,0.24))), 0.0);
+    vec3 col = mix(vec3(0.020,0.042,0.058), vec3(0.080,0.180,0.205), smoothstep(-2.0, 24.0, vW.y));
+    col *= 0.30 + 1.00*l1;
+    // 支线整体偏冷白，与暖金色的主线形成对照
+    col += vec3(0.020,0.075,0.095);
+    float c = fract(vW.y * 0.55);
+    col = mix(col, vec3(0.010,0.045,0.060), smoothstep(0.455,0.499,abs(c-0.5))*0.85);
+    col += vec3(0.06,0.50,0.62) * smoothstep(0.470,0.499,abs(c-0.5)) * 0.30;
+    col += vec3(0.10,0.50,0.62) * pow(1.0 - max(dot(n,V),0.0), 3.0) * 0.8;
+    float dl = distance(vW, uHead);
+    col += vec3(1.00,0.72,0.38) * exp(-dl*dl/56.0) * 0.34;
+
+    float a = smoothstep(0.09, 0.46, vFall) * uAppear;
+    if(uMode == 0){
+      a *= (1.0 - uDissolve);
+      col = mix(col, uFog, uDissolve*0.9);
+    } else if(uMode == 1){
+      float m = h21(floor(vUv*vec2(78.0,44.0)));
+      a *= smoothstep(uDissolve*1.25 - 0.28, uDissolve*1.25, m);
+      col = mix(col, vec3(0.26,0.34,0.40), 0.22);
+    } else if(uMode == 2){
+      a *= 1.0 - smoothstep(0.84, 1.0, uDissolve);
+    } else {
+      col = mix(col, vec3(0.030,0.052,0.072), min(uDissolve*1.10, 1.0));
+      a *= 1.0 - smoothstep(0.78, 1.0, uDissolve);
+    }
+    float d = length(cameraPosition - vW);
+    col = mix(col, uFog, smoothstep(uFogNear, uFogFar, d));
+    gl_FragColor = vec4(col, a);
+  }
+`;
+
+function buildBranch(n){
+  const segX = 46, segZ = 40;
+  const geo = new THREE.PlaneGeometry(48, n.branchLen, segX, segZ);
+  geo.rotateX(-Math.PI/2);
+  const pos = geo.attributes.position;
+  const fall = new Float32Array(pos.count);
+  for(let i=0;i<pos.count;i++){
+    const px = pos.getX(i) + n.x;
+    const dzl = pos.getZ(i) + n.branchLen/2;
+    const pz = n.z + dzl*n.side;
+    const s = branchShape(n, px, pz);
+    pos.setX(i, px); pos.setZ(i, pz);
+    pos.setY(i, heightAt(px,pz) + s.lift + 0.22);
+    fall[i] = s.fall;
+  }
+  geo.setAttribute("aFall", new THREE.BufferAttribute(fall,1));
+  geo.computeVertexNormals();
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms:{
+      uDissolve:{value:0}, uMode:{value:VISH_IDX[n.mode]}, uAppear:{value:0},
+      uFog:{value:FOG_COL}, uFogNear:{value:130}, uFogFar:{value:600},
+      uHead:{value:new THREE.Vector3(0,-999,0)}
+    },
+    vertexShader:BRANCH_VERT, fragmentShader:BRANCH_FRAG,
+    transparent:true, depthWrite:false
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.frustumCulled = false;
+  return {mesh, mat};
+}
+
+/* ---- 4.3 风沙粒子 ---- */
+let RNG_STATE = 0;
+function rnd(){
+  RNG_STATE ^= (RNG_STATE << 13); RNG_STATE >>>= 0;
+  RNG_STATE ^= (RNG_STATE >>> 17);
+  RNG_STATE ^= (RNG_STATE << 5);  RNG_STATE >>>= 0;
+  return RNG_STATE / 4294967296;
+}
+function buildSand(n){
+  const N = 380;
+  const pos = new Float32Array(N*3), rnds = new Float32Array(N*3);
+  let k=0;
+  for(let i=0;i<N;i++){
+    const dz = 2 + rnd()* (n.branchLen-6);
+    const lat = (rnd()-0.5)*2*n.bw*1.5;
+    const x = n.x + Math.sin(dz*0.09)*5.2 + lat;
+    const z = n.z + dz*n.side;
+    const s = branchShape(n, x, z);
+    pos[k]=x; pos[k+1]=heightAt(x,z)+s.lift+0.6; pos[k+2]=z;
+    rnds[k]=(rnd()-0.5); rnds[k+1]=rnd(); rnds[k+2]=(rnd()-0.5);
+    k+=3;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos,3));
+  geo.setAttribute("aR", new THREE.BufferAttribute(rnds,3));
+  const mat = new THREE.ShaderMaterial({
+    uniforms:{uT:{value:0}, uTime:{value:0}},
+    vertexShader:`
+      attribute vec3 aR; uniform float uT; uniform float uTime;
+      varying float vA;
+      void main(){
+        vec3 p = position;
+        p.x += aR.x*uT*30.0 + sin(uTime*2.2 + aR.z*11.0)*uT*2.2;
+        p.z += aR.z*uT*24.0;
+        p.y += uT*(9.0 + aR.y*15.0) - uT*uT*6.0;
+        vec4 mv = modelViewMatrix * vec4(p,1.0);
+        gl_PointSize = (1.0-uT)*(1.8 + aR.y*3.2)*(210.0/max(-mv.z,1.0));
+        vA = (1.0-uT)*0.85;
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader:`
+      varying float vA;
+      void main(){
+        vec2 d = gl_PointCoord - vec2(0.5);
+        if(dot(d,d) > 0.25) discard;
+        gl_FragColor = vec4(0.72,0.655,0.50, vA);
+      }`,
+    transparent:true, depthWrite:false
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  return {points:pts, mat};
+}
+
+/* ---- 4.4 疤痕记忆层：编译期预烘焙，运行期只读 ---- */
+function buildScar(n){
+  const steps = 44;
+  const centers = [];
+  for(let i=0;i<=steps;i++){
+    const u = i/steps;
+    const dz = 1.5 + u*(n.branchLen-3);
+    const x = n.x + Math.sin(dz*0.09)*5.2;
+    const z = n.z + dz*n.side;
+    centers.push(new THREE.Vector3(x, heightAt(x,z)+0.42, z));
+  }
+  const verts = [], idx = [];
+  for(let i=0;i<centers.length;i++){
+    const p = centers[i];
+    const a = centers[Math.max(0,i-1)], b = centers[Math.min(centers.length-1,i+1)];
+    const tx = b.x-a.x, tz = b.z-a.z;
+    const len = Math.hypot(tx,tz)||1;
+    const nx = -tz/len, nz = tx/len;
+    const w = 0.7 + 0.7*fbm(i*0.31, n.scar*2.7) + n.scar*0.12;
+    verts.push(p.x+nx*w, p.y, p.z+nz*w, p.x-nx*w, p.y, p.z-nz*w);
+    if(i<centers.length-1){
+      const k = i*2;
+      idx.push(k,k+1,k+2, k+1,k+3,k+2);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(verts,3));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshBasicMaterial({
+    color:0xbfe8ff, transparent:true, opacity:0,
+    depthWrite:false, side:THREE.DoubleSide, blending:THREE.AdditiveBlending
+  });
+  return {mesh:new THREE.Mesh(geo, mat), mat};
+}
+
+/* ============================================================
+   5. 编译并构建场景
+   ============================================================ */
+SEED_INT = seedFrom(FILM.seed);
+RNG_STATE = (SEED_INT ^ 0x9e3779b9) >>> 0;
+
+const film = compile(FILM);
+if(!film.ok){
+  document.getElementById("bootS").textContent = "编译失败：" + film.errors.join(" / ");
+  throw new Error("compile failed");
+}
+console.info("[compile] min camera clearance = " + film.minClearance.toFixed(2) + " u");
+document.getElementById("hudMin").textContent = film.minClearance.toFixed(1) + " u";
+
+const forks = [];
+film.nodes.forEach(n=>{
+  const b = buildBranch(n);
+  const s = buildScar(n);
+  const sd = buildSand(n);
+  const gh = buildGhost(n);
+  scene.add(b.mesh); scene.add(s.mesh); scene.add(sd.points);
+  scene.add(gh.line); scene.add(gh.vein); scene.add(gh.head);
+  const anchor = (()=>{
+    const dz = n.branchLen * 0.55;
+    const x = n.x + Math.sin(dz*0.09)*5.2;
+    const z = n.z + dz;
+    return new THREE.Vector3(x, heightAt(x, z) + branchShape(n, x, z).lift + 2.6, z);
+  })();
+  forks.push({node:n, branch:b, scar:s, sand:sd, ghost:gh, anchor});
+});
+
+/* ---- 4.5 幽灵路径：支线上的暗色行进者，消失后留作根系 ---- */
+function buildGhost(n){
+  const hi = [], low = [];
+  for(let dz=5; dz<=n.branchLen-9; dz+=1){
+    const x = n.x + Math.sin(dz*0.09)*5.2;
+    const z = n.z + dz;
+    const s = branchShape(n, x, z);
+    const base = heightAt(x,z);
+    hi.push(new THREE.Vector3(x, base + s.lift + 1.4, z));
+    low.push(new THREE.Vector3(x, base + 0.55, z));
+  }
+  const mk = (pts, color, op)=>{
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({
+      color, transparent:true, opacity:op,
+      blending:THREE.AdditiveBlending, depthWrite:false
+    }));
+    line.frustumCulled = false;
+    line.visible = false;
+    return line;
+  };
+  const line = mk(hi, 0xc9a978, 0);
+  const vein = mk(low, 0x7d9a89, 0.16);
+  const head = new THREE.Sprite(new THREE.SpriteMaterial({
+    map:GLOW_TEX, color:0xc9e2d3, transparent:true,
+    blending:THREE.AdditiveBlending, depthWrite:false, depthTest:false
+  }));
+  head.scale.set(2.4,2.4,1);
+  head.visible = false;
+  return {pts:hi, line, vein, head};
+}
+
+/* ============================================================
+   6. 逐帧渲染（纯函数：给定 t，画面唯一确定）
+   ============================================================ */
+function sampleTrack(keys, t){
+  const fovOf = k => (k.fov || 46);
+  if(t <= keys[0].t) return {p:keys[0].p, q:keys[0].q, fov:fovOf(keys[0])};
+  const last = keys[keys.length-1];
+  if(t >= last.t) return {p:last.p, q:last.q, fov:fovOf(last)};
+  for(let i=1;i<keys.length;i++){
+    const a=keys[i-1], b=keys[i];
+    if(t <= b.t){
+      let u = (t-a.t)/Math.max(b.t-a.t, 1e-6);
+      u = u*u*(3-2*u);
+      return {
+        p:[lerp(a.p[0],b.p[0],u), lerp(a.p[1],b.p[1],u), lerp(a.p[2],b.p[2],u)],
+        q:[lerp(a.q[0],b.q[0],u), lerp(a.q[1],b.q[1],u), lerp(a.q[2],b.q[2],u)],
+        fov: lerp(fovOf(a), fovOf(b), u)
+      };
+    }
+  }
+  return {p:last.p, q:last.q, fov:fovOf(last)};
+}
+
+/* 主线光点：节点处驻留，段内按坡度加权推进 */
+function lightIndexAt(t){
+  const nd = FILM.nodeDuration;
+  const n = film.nodes.length;
+  const i = clamp(Math.floor(t/nd), 0, n-1);
+  const tl = t - i*nd;
+  const u = clamp((tl - 1.2) / (nd - 1.6), 0, 1);
+  const a = Math.min(i*80, LIGHT.pts.length-1);
+  const b = Math.min((i+1)*80, LIGHT.pts.length-1);
+  if(b <= a) return a;
+  const c0 = LIGHT.cum[a], c1 = LIGHT.cum[b];
+  const target = c0 + (c1-c0)*u;
+  let lo=a, hi=b;
+  while(hi - lo > 1){
+    const mid = (lo+hi)>>1;
+    if(LIGHT.cum[mid] < target) lo = mid; else hi = mid;
+  }
+  const seg = Math.max(LIGHT.cum[lo+1]-LIGHT.cum[lo], 1e-9);
+  return lo + clamp((target-LIGHT.cum[lo])/seg, 0, 1);
+}
+
+const ui = {
+  node:document.getElementById("hudNode"),
+  phase:document.getElementById("hudPhase"),
+  cam:document.getElementById("hudCam"),
+  scar:document.getElementById("hudScar"),
+  value:document.getElementById("hudValue"),
+  clear:document.getElementById("hudClear"),
+  year:document.getElementById("capYear"),
+  title:document.getElementById("capTitle"),
+  main:document.getElementById("capMain"),
+  alt:document.getElementById("capAlt"),
+  altText:document.getElementById("capAltText"),
+  tNow:document.getElementById("tNow")
+};
+
+let currentFork = null;
+let currentClearance = 0;
+let currentPov = 0;
+
+/* 背景音乐：跟随播放头，暂停即停 */
+const bgm = document.getElementById("bgm");
+bgm.volume = 0.42;
+let musicOn = true;
+function syncBgmTo(t){
+  if(!musicOn || !isFinite(bgm.duration) || bgm.duration <= 0) return;
+  const target = t % bgm.duration;
+  if(Math.abs(bgm.currentTime - target) > 0.35) bgm.currentTime = target;
+}
+
+function phaseOf(t){
+  if(t >= film.outroStart) return {name:"结尾 · 疤痕累积", f:null, cam:"拉远"};
+  for(const f of forks){
+    const n=f.node;
+    if(t >= n.begin && t < n.commit){
+      if(t < n.begin + n.appear) return {name:"分叉出现", f, cam:"预设计机位 · 侧移"};
+      if(t < n.endLive)          return {name:"支线存续", f, cam:"预设计机位 · 侧视"};
+      return {name:"支线消失 · " + n.mode, f, cam:"缓速侧持"};
+    }
+  }
+  for(let i=forks.length-1;i>=0;i--){
+    const n=forks[i].node;
+    if(t >= n.commit && t < n.start + FILM.nodeDuration) return {name:"疤痕留存", f:forks[i], cam:"回望"};
+    if(t >= n.start && t < n.begin) return {name:"主线推进", f:null, cam:"样条推进"};
+  }
+  return {name:"主线推进", f:null, cam:"样条推进"};
+}
+
+/* 光点事件标签：节点到达时浮在光点上方，约 4 秒后淡出 */
+const ptagEl = document.getElementById("ptag");
+const ptagYear = document.getElementById("ptagYear");
+const ptagTitle = document.getElementById("ptagTitle");
+let ptagKey = "";
+function pointEventAt(t){
+  for(const n of film.nodes){
+    const a = n.start + 0.9, b = a + 3.8;
+    if(t >= a && t < b){
+      const fi = smooth(a, a + 0.35, t), fo = 1 - smooth(b - 0.75, b, t);
+      return {n, a: Math.min(fi, fo)};
+    }
+  }
+  return null;
+}
+function updatePointTag(t, hx, hy, hz){
+  if(t >= film.outroStart + 0.3 || document.body.classList.contains("nocap")){
+    ptagEl.style.opacity = 0;
+    return;
+  }
+  const ev = pointEventAt(t);
+  if(!ev){ ptagEl.style.opacity = 0; return; }
+  const key = ev.n.year + "|" + ev.n.title;
+  if(ptagKey !== key){
+    ptagKey = key;
+    ptagYear.textContent = ev.n.year;
+    ptagTitle.textContent = ev.n.title;
+  }
+  camera.updateMatrixWorld();
+  const v = new THREE.Vector3(hx, hy + 2.0, hz).project(camera);
+  if(v.z > 1){ ptagEl.style.opacity = 0; return; }
+  const sx = (v.x*0.5 + 0.5)*window.innerWidth;
+  const sy = (-v.y*0.5 + 0.5)*window.innerHeight;
+  ptagEl.style.transform = "translate(-50%,-100%) translate(" + sx.toFixed(1) + "px," + sy.toFixed(1) + "px)";
+  ptagEl.style.opacity = ev.a.toFixed(3);
+}
+
+/* 支线标签：贴在支线地形上方，随支线消失而淡出 */
+const btagEl = document.getElementById("btag");
+const btagText = document.getElementById("btagText");
+const btagMeta = document.getElementById("btagMeta");
+let btagKey = "";
+function activeBranchAt(t){
+  for(const f of forks){
+    const n = f.node;
+    if(t >= n.begin && t < n.commit) return f;
+  }
+  return null;
+}
+function updateBranchTag(t){
+  if(t >= film.outroStart || document.body.classList.contains("nocap")){
+    btagEl.style.opacity = 0;
+    return;
+  }
+  const f = activeBranchAt(t);
+  if(!f){ btagEl.style.opacity = 0; return; }
+  const n = f.node;
+  const alpha = Math.min(smooth(n.begin, n.begin + 0.45, t), 1 - smooth(n.commit - 0.9, n.commit, t));
+  if(alpha <= 0.01){ btagEl.style.opacity = 0; return; }
+  if(btagKey !== n.id){
+    btagKey = n.id;
+    btagText.textContent = n.alt;
+    btagMeta.textContent = n.terrain + " · " + n.mode;
+  }
+  camera.updateMatrixWorld();
+  const v = f.anchor.clone().project(camera);
+  if(v.z > 1){ btagEl.style.opacity = 0; return; }
+  const sx = (v.x*0.5 + 0.5)*window.innerWidth;
+  const sy = (-v.y*0.5 + 0.5)*window.innerHeight;
+  btagEl.style.transform = "translate(-50%,0) translate(" + (sx + 36).toFixed(1) + "px," + (sy + 10).toFixed(1) + "px)";
+  btagEl.style.opacity = alpha.toFixed(3);
+}
+
+function renderAt(t){
+  t = clamp(t, 0, film.duration);
+
+  // 主线光点位置（POV 需要先算出来）
+  const li = lightIndexAt(t);
+  const l0 = Math.floor(li), l1 = Math.min(l0+1, LIGHT.pts.length-1), lf = li-l0;
+  const hx = lerp(LIGHT.pts[l0].x, LIGHT.pts[l1].x, lf);
+  const hy = lerp(LIGHT.pts[l0].y, LIGHT.pts[l1].y, lf) + Math.sin(t*2.1)*0.28;
+  const hz = lerp(LIGHT.pts[l0].z, LIGHT.pts[l1].z, lf);
+
+  // 相机：主线推进用第一人称，分叉窗口退回预设计机位
+  const s = sampleTrack(film.keys, t);
+  let cy = s.p[1];
+  const off = 14;
+  let ground = surfaceAt(s.p[0], s.p[2], t, film.nodes);
+  ground = Math.max(ground,
+    surfaceAt(s.p[0]+off, s.p[2], t, film.nodes),
+    surfaceAt(s.p[0]-off, s.p[2], t, film.nodes),
+    surfaceAt(s.p[0], s.p[2]+off, t, film.nodes),
+    surfaceAt(s.p[0], s.p[2]-off, t, film.nodes));
+  cy = Math.max(cy, ground + 7);
+  currentClearance = cy - ground;
+
+  let wp = 1;
+  for(const f of forks){
+    const a = f.node.begin - 0.5, b = f.node.commit + 0.5;
+    const ramp = smooth(a, a+0.7, t) * (1 - smooth(b-0.7, b, t));
+    wp = Math.min(wp, 1 - ramp);
+  }
+  wp = clamp(wp, 0, 1);
+  // 结尾拉远必须回到第三人称
+  wp *= 1 - smooth(film.outroStart - 0.8, film.outroStart - 0.1, t);
+  currentPov = wp;
+
+  const iB = clamp(Math.floor(li) - 26, 0, LIGHT.pts.length - 1);
+  const iA = clamp(Math.floor(li) + 46, 0, LIGHT.pts.length - 1);
+  const bk = LIGHT.pts[iB];
+  const ah = LIGHT.pts[iA];
+  const povY = Math.max(LIGHT.eye[iB], surfaceAt(bk.x, bk.z, t, film.nodes) + 2.4) + Math.sin(t*3.2)*0.05;
+  camera.position.set(lerp(s.p[0], bk.x, wp), lerp(cy, povY, wp), lerp(s.p[2], bk.z, wp));
+
+  const tgtY = Math.max(s.q[1], surfaceAt(s.q[0], s.q[2], t, film.nodes) + 2.5);
+  camera.lookAt(lerp(s.q[0], ah.x, wp), lerp(tgtY, LIGHT.eye[iA] + 0.8, wp), lerp(s.q[2], ah.z, wp));
+
+  const fov = lerp(s.fov, 66, wp);
+  if(Math.abs(camera.fov - fov) > 0.01){
+    camera.fov = fov;
+    camera.updateProjectionMatrix();
+  }
+
+  lightHead.position.set(hx, hy, hz);
+  lightCore.position.set(hx, hy, hz);
+  updatePointTag(t, hx, hy, hz);
+  updateBranchTag(t);
+  lightHead.material.opacity = (0.44 + 0.12*Math.sin(t*3.3)) * (1 - 0.75*wp);
+  lightHead.scale.setScalar(9.5 * (1 + 0.09*Math.sin(t*3.1)) * (1 - 0.55*wp));
+  lightCore.scale.setScalar(3.2 * (1 + 0.16*Math.sin(t*5.2)) * (1 - 0.45*wp));
+
+  RIBBON.mat.uniforms.uHeadT.value = li/(LIGHT.pts.length-1);
+  RIBBON.mat.uniforms.uPulse.value = Math.sin(t*3.1);
+  RIBBON.mat.uniforms.uTime.value = t;
+  mainMat.uniforms.uHead.value.set(hx, hy, hz);
+  mainMat.uniforms.uTime.value = t;
+  DUST.mat.uniforms.uTime.value = t;
+  SPARKS.mat.uniforms.uTime.value = t;
+  SPARKS.mat.uniforms.uHead.value.set(hx, hy, hz);
+  for(const f of forks) f.branch.mat.uniforms.uHead.value.set(hx, hy, hz);
+
+  const showHead = t < film.outroStart + 0.4;
+  lightHead.visible = showHead;
+  lightCore.visible = showHead;
+  SPARKS.pts.visible = showHead;
+
+  // 支线状态（全部由 t 推导，不做累积）
+  forks.forEach(f=>{
+    const n = f.node;
+    const d = clamp((t - n.endLive)/n.dur, 0, 1);
+    const gone = t >= n.commit;
+    const visible = t >= n.begin && !gone;
+
+    f.branch.mesh.visible = visible;
+    f.branch.mat.uniforms.uDissolve.value = (t < n.endLive) ? 0 : d;
+    f.branch.mat.uniforms.uAppear.value = smooth(n.begin, n.begin+n.appear, t);
+
+    const sandOn = visible && n.mode === "风沙" && t >= n.endLive;
+    f.sand.points.visible = sandOn;
+    f.sand.mat.uniforms.uT.value = sandOn ? d : 0;
+    f.sand.mat.uniforms.uTime.value = t;
+
+    // 疤痕：预烘焙几何，只切可见性与透明度
+    const sc = t >= n.commit;
+    f.scar.mesh.visible = sc;
+    f.scar.mat.opacity = sc ? SCAR_OPACITY[n.scar] * smooth(n.commit, n.commit+0.6, t) : 0;
+
+    // 幽灵路径：支线行进者只在支线存在时贴着支线走；消失后降为贴地根系
+    const gh = f.ghost;
+    const onBranch = t >= n.begin && t < n.commit;
+    gh.line.visible = onBranch;       // 支线存活时给一条暖色路脊线，压低后仍能读成"一条路"
+    gh.vein.visible = t >= n.commit;
+    if(onBranch){
+      gh.line.material.opacity = 0.22*(1 - 0.85*d);
+      const life = clamp((t - n.begin - 0.3)/Math.max(n.endLive - n.begin - 0.3, 0.4), 0, 1);
+      const gi = life*(gh.pts.length-1);
+      const g0 = Math.floor(gi), g1 = Math.min(g0+1, gh.pts.length-1), gf = gi-g0;
+      gh.head.visible = true;
+      const A = gh.pts[g0], B = gh.pts[g1];
+      gh.head.position.set(lerp(A.x,B.x,gf), lerp(A.y,B.y,gf), lerp(A.z,B.z,gf));
+      gh.head.scale.setScalar(2.4 * (1 - 0.5*d));
+    } else {
+      gh.head.visible = false;
+    }
+  });
+
+  // 当前节点与文字层
+  const idx = clamp(Math.floor(t / FILM.nodeDuration), 0, film.nodes.length-1);
+  const n = film.nodes[idx];
+
+  if(t >= film.outroStart){
+    ui.year.textContent  = "之后";
+    ui.title.textContent = "地貌即人生";
+    ui.main.textContent  = "被删掉的岔路连成根系，主线是唯一还在发亮的河道";
+    ui.alt.classList.remove("on");
+  } else {
+    ui.year.textContent  = n.year + " · " + n.age + " 岁";
+    ui.title.textContent = n.title;
+    ui.main.textContent  = n.main;
+
+    const fork = forks[idx];
+    const altOn = t >= fork.node.begin && t < fork.node.commit;
+    ui.alt.classList.toggle("on", altOn);
+    if(altOn) ui.altText.textContent = n.alt;
+  }
+
+  // HUD
+  const ph = phaseOf(t);
+  ui.node.textContent  = t >= film.outroStart ? "OUTRO · 疤痕累积" : (n.id + " · " + n.title);
+  ui.phase.textContent = ph.name;
+  ui.cam.textContent   = currentPov > 0.5 ? "第一人称 · 贴地" : ph.cam;
+  const scars = forks.filter(f=> t >= f.node.commit).length;
+  ui.scar.textContent  = scars + " / " + forks.length;
+  if(t >= film.outroStart){
+    ui.value.textContent = film.nodes[film.nodes.length-1].value + "（终值）";
+  } else {
+    const d = n.delta >= 0 ? "+" + n.delta : String(n.delta);
+    ui.value.textContent = n.value + "（" + d + "）";
+  }
+  ui.clear.textContent = currentClearance.toFixed(1) + " u";
+  ui.clear.className = "v" + (currentClearance < 8 ? " bad" : "");
+
+  renderer.render(scene, camera);
+}
+
+/* ============================================================
+   7. 播放控制
+   ============================================================ */
+const totalFrames = Math.round(film.duration * film.fps);
+let frame = 0, playing = false, speed = 1, lastTs = 0, exporting = false;
+
+document.getElementById("mSeed").textContent   = film.seed;
+document.getElementById("mFps").textContent    = film.fps;
+document.getElementById("mLen").textContent    = film.duration.toFixed(1) + "s";
+document.getElementById("mFrames").textContent = totalFrames;
+document.getElementById("tEnd").textContent    = fmtTime(film.duration);
+document.getElementById("scrub").max = String(totalFrames-1);
+
+function fmtTime(sec){
+  const m = Math.floor(sec/60), s = sec-m*60;
+  return String(m).padStart(2,"0")+":"+s.toFixed(1).padStart(4,"0");
+}
+
+// 进度条上的节点刻度与分叉区间
+{
+  const marks = document.getElementById("marks");
+  film.nodes.forEach(n=>{
+    const p = (n.start/film.duration)*100;
+    const i = document.createElement("i");
+    i.style.left = p+"%"; marks.appendChild(i);
+    if(n.alt){
+      const u = document.createElement("u");
+      u.style.left = ((n.begin)/film.duration*100)+"%";
+      u.style.width = ((n.commit-n.begin)/film.duration*100)+"%";
+      marks.appendChild(u);
+    }
+  });
+}
+
+function loop(ts){
+  requestAnimationFrame(loop);
+  if(exporting) return;            // 导出期间禁止实时循环覆盖画布
+  if(playing){
+    if(!lastTs) lastTs = ts;
+    const dt = Math.min((ts-lastTs)/1000, 0.1);
+    lastTs = ts;
+    frame += dt*film.fps*speed;
+    if(frame >= totalFrames-1){ frame = totalFrames-1; setPlaying(false); }
+  } else {
+    lastTs = 0;
+  }
+  const t = frame/film.fps;
+  renderAt(t);
+  if(clipEnd !== null && t >= clipEnd){
+    frame = clipEnd*film.fps;
+    setPlaying(false);
+  }
+  const scrub = document.getElementById("scrub");
+  scrub.value = String(Math.round(frame));
+  ui.tNow.textContent = fmtTime(t);
+  drawLifeCurve(t);
+  if(playing) syncBgmTo(t);
+}
+
+/* 底部人生曲线：地形高低就是这条线，等价于 K 线 */
+const lifeCv = document.getElementById("lifeCurve");
+const lifeCtx = lifeCv.getContext("2d");
+function drawLifeCurve(t){
+  const W = lifeCv.width, H = lifeCv.height, pad = 9;
+  lifeCtx.clearRect(0,0,W,H);
+  const dur = film.duration;
+  const tx = v => (v/dur)*W;
+  const ly = v => H - pad - v*(H-2*pad);
+  const vn = n => valueNorm(n.value == null ? V_BASE : n.value);
+  // 100 基准线
+  lifeCtx.strokeStyle = "rgba(120,220,255,0.22)";
+  lifeCtx.lineWidth = 1;
+  lifeCtx.beginPath(); lifeCtx.moveTo(0, ly(valueNorm(V_BASE))); lifeCtx.lineTo(W, ly(valueNorm(V_BASE))); lifeCtx.stroke();
+
+  const pts = film.nodes.map(n=>[tx(n.start+2), ly(vn(n))]);
+  lifeCtx.beginPath();
+  lifeCtx.moveTo(pts[0][0], pts[0][1]);
+  for(let i=1;i<pts.length;i++) lifeCtx.lineTo(pts[i][0], pts[i][1]);
+  lifeCtx.lineTo(W, ly(vn(film.nodes[film.nodes.length-1])));
+  lifeCtx.strokeStyle = "rgba(255,196,120,0.60)";
+  lifeCtx.lineWidth = 2;
+  lifeCtx.stroke();
+  lifeCtx.lineTo(W, H); lifeCtx.lineTo(pts[0][0], H); lifeCtx.closePath();
+  lifeCtx.fillStyle = "rgba(255,190,110,0.07)"; lifeCtx.fill();
+
+  film.nodes.forEach((n,i)=>{
+    const [x,y] = pts[i];
+    lifeCtx.fillStyle = n.start <= t ? "rgba(255,224,176,0.95)" : "rgba(255,224,176,0.26)";
+    lifeCtx.beginPath(); lifeCtx.arc(x,y,2.6,0,6.2832); lifeCtx.fill();
+  });
+
+  const px = tx(clamp(t,0,dur));
+  lifeCtx.strokeStyle = "rgba(255,255,255,0.45)";
+  lifeCtx.lineWidth = 1;
+  lifeCtx.beginPath(); lifeCtx.moveTo(px,0); lifeCtx.lineTo(px,H); lifeCtx.stroke();
+}
+
+function setPlaying(v){
+  playing = v;
+  document.getElementById("btnPlay").textContent = v ? "❚❚ 暂停" : "▶ 播放";
+  if(v){
+    syncBgmTo(frame/film.fps);
+    if(musicOn) bgm.play().catch(()=>{});
+  } else {
+    bgm.pause();
+  }
+}
+document.getElementById("btnPlay").addEventListener("click", ()=> setPlaying(!playing));
+const btnMusic = document.getElementById("btnMusic");
+btnMusic.addEventListener("click", ()=>{
+  musicOn = !musicOn;
+  btnMusic.textContent = musicOn ? "♪ 音乐 开" : "♪ 音乐 关";
+  if(!musicOn){ bgm.pause(); }
+  else if(playing){ syncBgmTo(frame/film.fps); bgm.play().catch(()=>{}); }
+});
+window.addEventListener("keydown", e=>{
+  if(e.code === "KeyM"){ btnMusic.click(); }
+});
+document.getElementById("scrub").addEventListener("input", e=>{
+  setPlaying(false);
+  frame = Number(e.target.value);
+});
+window.addEventListener("keydown", e=>{
+  if(e.code === "Space"){ e.preventDefault(); setPlaying(!playing); }
+});
+window.addEventListener("resize", ()=>{
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+});
+
+/* ============================================================
+   8. 确定性校验
+   ============================================================ */
+function hashCanvas(){
+  const c = document.createElement("canvas");
+  c.width = 160; c.height = 90;
+  const ctx = c.getContext("2d");
+  ctx.drawImage(renderer.domElement, 0, 0, 160, 90);
+  const d = ctx.getImageData(0,0,160,90).data;
+  let h = 2166136261;
+  for(let i=0;i<d.length;i+=3){ h ^= d[i]; h = Math.imul(h,16777619); }
+  return (h>>>0).toString(16).padStart(8,"0");
+}
+document.getElementById("btnCheck").addEventListener("click", ()=>{
+  const target = Math.round(frame);
+  const t = target/film.fps;
+  // 先跳到别处，再回来重渲，模拟跳段重渲
+  renderAt(Math.min(film.duration, t + 7.3));
+  const other = hashCanvas();
+  renderAt(t);
+  const a = hashCanvas();
+  renderAt(0.31);
+  renderAt(t);
+  const b = hashCanvas();
+  toast("FRAME " + String(target).padStart(5,"0") + "  重渲 " + a + " / " + b +
+        (a===b ? "  ✓ 一致（对照帧 " + other + "）" : "  ✗ 漂移"),
+        a===b);
+});
+
+let toastTimer = null;
+function toast(msg, ok){
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.style.borderColor = ok===false ? "#5a3a30" : "#3c4a42";
+  el.style.color = ok===false ? "#e0a08e" : "#bcd3bf";
+  el.classList.add("on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> el.classList.remove("on"), 2600);
+}
+
+/* ============================================================
+   9. 逐帧导出（PNG/JPEG 序列 → ZIP）
+   ============================================================ */
+const CRC_TABLE = (()=>{
+  const t = new Uint32Array(256);
+  for(let n=0;n<256;n++){
+    let c = n;
+    for(let k=0;k<8;k++) c = (c&1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1);
+    t[n] = c>>>0;
+  }
+  return t;
+})();
+function crc32(buf){
+  let c = 0xFFFFFFFF;
+  for(let i=0;i<buf.length;i++) c = CRC_TABLE[(c ^ buf[i]) & 0xFF] ^ (c>>>8);
+  return (c ^ 0xFFFFFFFF)>>>0;
+}
+function zipStore(files){
+  const enc = new TextEncoder();
+  const chunks = []; let offset = 0;
+  const central = [];
+  for(const f of files){
+    const name = enc.encode(f.name);
+    const crc = crc32(f.data);
+    const h = new Uint8Array(30 + name.length);
+    const dv = new DataView(h.buffer);
+    dv.setUint32(0, 0x04034b50, true);
+    dv.setUint16(4, 20, true); dv.setUint16(6, 0, true); dv.setUint16(8, 0, true);
+    dv.setUint16(10, 0, true); dv.setUint16(12, 0x0021, true);   // 固定时间戳，保证可复现
+    dv.setUint32(14, crc, true);
+    dv.setUint32(18, f.data.length, true); dv.setUint32(22, f.data.length, true);
+    dv.setUint16(26, name.length, true); dv.setUint16(28, 0, true);
+    h.set(name, 30);
+    chunks.push(h, f.data);
+    central.push({name, crc, size:f.data.length, offset});
+    offset += h.length + f.data.length;
+  }
+  const cdStart = offset;
+  for(const c of central){
+    const h = new Uint8Array(46 + c.name.length);
+    const dv = new DataView(h.buffer);
+    dv.setUint32(0, 0x02014b50, true);
+    dv.setUint16(4, 20, true); dv.setUint16(6, 20, true);
+    dv.setUint16(8, 0, true); dv.setUint16(10, 0, true);
+    dv.setUint16(12, 0, true); dv.setUint16(14, 0x0021, true);
+    dv.setUint32(16, c.crc, true);
+    dv.setUint32(20, c.size, true); dv.setUint32(24, c.size, true);
+    dv.setUint16(28, c.name.length, true);
+    dv.setUint32(42, c.offset, true);
+    h.set(c.name, 46);
+    chunks.push(h);
+    offset += h.length;
+  }
+  const cdSize = offset - cdStart;
+  const eocd = new Uint8Array(22);
+  const dv = new DataView(eocd.buffer);
+  dv.setUint32(0, 0x06054b50, true);
+  dv.setUint16(8, central.length, true); dv.setUint16(10, central.length, true);
+  dv.setUint32(12, cdSize, true); dv.setUint32(16, cdStart, true);
+  chunks.push(eocd);
+  return new Blob(chunks, {type:"application/zip"});
+}
+
+document.getElementById("btnExport").addEventListener("click", ()=>{
+  document.getElementById("panel").classList.toggle("on");
+});
+document.getElementById("btnClose").addEventListener("click", ()=>{
+  document.getElementById("panel").classList.remove("on");
+});
+document.getElementById("exEnd").max = String(Math.floor(film.duration));
+
+document.getElementById("btnRun").addEventListener("click", async ()=>{
+  if(exporting) return;
+  const startSec = clamp(Number(document.getElementById("exStart").value)||0, 0, film.duration);
+  const endSec   = clamp(Number(document.getElementById("exEnd").value)||12, 0, film.duration);
+  const [w,h]    = document.getElementById("exRes").value.split("x").map(Number);
+  const fmt      = document.getElementById("exFmt").value;
+  const ext      = fmt === "image/png" ? "png" : "jpg";
+  const f0 = Math.round(startSec*film.fps);
+  const f1 = Math.min(Math.round(endSec*film.fps), totalFrames-1);
+  if(f1 <= f0){ toast("结束帧必须在起始帧之后", false); return; }
+
+  exporting = true;
+  setPlaying(false);
+  const oldW = renderer.domElement.width, oldH = renderer.domElement.height;
+  const oldPR = renderer.getPixelRatio();
+  renderer.setPixelRatio(1);
+  renderer.setSize(w, h, false);
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+
+  const files = [];
+  const bar = document.getElementById("progBar");
+  const note = document.getElementById("exNote");
+  const btn = document.getElementById("btnRun");
+  btn.disabled = true;
+
+  for(let f=f0; f<=f1; f++){
+    renderAt(f/film.fps);
+    const blob = await new Promise(res=> renderer.domElement.toBlob(res, fmt, 0.88));
+    files.push({
+      name:"frame_"+String(f+1).padStart(5,"0")+"."+ext,
+      data:new Uint8Array(await blob.arrayBuffer())
+    });
+    const p = (f-f0+1)/(f1-f0+1);
+    bar.style.width = (p*100).toFixed(1)+"%";
+    note.textContent = "渲染中 " + (f-f0+1) + " / " + (f1-f0+1) + " 帧 · " + w + "×" + h;
+    if((f-f0) % 3 === 0) await new Promise(r=> setTimeout(r, 0));
+  }
+
+  note.textContent = "打包中…";
+  const zip = zipStore(files);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(zip);
+  a.download = "terrain_"+film.person+"_"+f0+"-"+f1+"_"+w+"x"+h+".zip";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=> URL.revokeObjectURL(a.href), 4000);
+  window.__exportStats = {frames: files.length, bytes: zip.size, first: files[0].name};
+
+  note.textContent = "完成：" + files.length + " 帧，" + (zip.size/1048576).toFixed(1) +
+    " MB，ZIP 已生成。ffmpeg -framerate " + film.fps + " -i frame_%05d." + ext + " out.mp4";
+  bar.style.width = "0%";
+  btn.disabled = false;
+  exporting = false;
+
+  renderer.setPixelRatio(oldPR);
+  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+});
+
+/* ============================================================
+   10. 启动
+   ============================================================ */
+// 盲测嵌入参数：?embed=1&nocap=1&t0=61&t1=74.6
+const QS = new URLSearchParams(location.search);
+const EMBED = QS.get("embed") === "1";
+let clipEnd = null;
+if(EMBED) document.body.classList.add("embed");
+if(QS.get("nocap") === "1") document.body.classList.add("nocap");
+if(QS.has("t0")) frame = clamp(parseFloat(QS.get("t0")) || 0, 0, film.duration) * film.fps;
+if(QS.has("t1")) clipEnd = clamp(parseFloat(QS.get("t1")) || film.duration, 0, film.duration);
+
+setPlaying(true);
+requestAnimationFrame(loop);
+setTimeout(()=> document.getElementById("boot").classList.add("off"), 120);
+</script>
+</body>
+</html>

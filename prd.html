@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>地貌删减线 · 动态生成系统 — 产品需求文档 v0.1</title>
+<style>
+  :root{
+    --bg:#0b0d0c;
+    --bg2:#0f1211;
+    --panel:#121615;
+    --line:#242a27;
+    --line2:#1a1f1d;
+    --ink:#e9e5db;
+    --dim:#9aa19b;
+    --dim2:#6f7773;
+    --accent:#d8a24a;
+    --jade:#7fb98a;
+    --rust:#d97a5a;
+    --slate:#8f93a8;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    font-size:15px;
+    line-height:1.78;
+    -webkit-font-smoothing:antialiased;
+  }
+  #contours{position:fixed;inset:0;width:100%;height:100%;opacity:.055;pointer-events:none;z-index:0}
+  .shell{position:relative;z-index:1;display:flex;max-width:1340px;margin:0 auto;gap:0}
+
+  /* ---------- sidebar ---------- */
+  aside{
+    width:268px;flex:0 0 268px;
+    padding:56px 28px 80px 36px;
+    position:sticky;top:0;height:100vh;overflow-y:auto;
+    border-right:1px solid var(--line2);
+  }
+  aside .brand{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--accent);text-transform:uppercase;margin-bottom:6px}
+  aside .brand-sub{font-size:12px;color:var(--dim2);margin-bottom:34px;letter-spacing:.02em}
+  aside nav a{
+    display:flex;gap:10px;align-items:baseline;
+    padding:7px 0;color:var(--dim);text-decoration:none;font-size:13.5px;
+    border-bottom:1px solid transparent;transition:color .18s;
+  }
+  aside nav a .no{font-family:var(--mono);font-size:11px;color:var(--dim2);min-width:20px}
+  aside nav a:hover{color:var(--ink)}
+  aside nav a.active{color:var(--accent)}
+  aside nav a.active .no{color:var(--accent)}
+  aside .foot{margin-top:36px;font-size:11.5px;color:var(--dim2);line-height:1.9;font-family:var(--mono)}
+
+  /* ---------- main ---------- */
+  main{flex:1;min-width:0;padding:56px 56px 120px 56px;max-width:1010px}
+
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:9px;
+    font-family:var(--mono);font-size:11px;letter-spacing:.2em;
+    color:var(--accent);text-transform:uppercase;margin-bottom:18px;
+  }
+  .eyebrow::before{content:"";width:26px;height:1px;background:var(--accent);display:block}
+
+  h1{font-size:clamp(30px,4.2vw,50px);line-height:1.18;font-weight:600;letter-spacing:-.02em;margin-bottom:14px}
+  h1 em{font-style:normal;color:var(--accent)}
+  .lede{font-size:16.5px;color:var(--dim);max-width:660px;margin-bottom:34px}
+
+  .meta{
+    display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    margin-bottom:12px;
+  }
+  .meta div{padding:16px 18px 16px 0;border-right:1px solid var(--line2)}
+  .meta div:last-child{border-right:0}
+  .meta dt{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;color:var(--dim2);text-transform:uppercase;margin-bottom:5px}
+  .meta dd{font-size:13.5px;color:var(--ink)}
+  .legend{font-size:12px;color:var(--dim2);margin-bottom:56px;font-family:var(--mono)}
+
+  section{margin-bottom:74px;scroll-margin-top:34px}
+  h2{
+    display:flex;align-items:baseline;gap:14px;
+    font-size:24px;font-weight:600;letter-spacing:-.01em;
+    padding-bottom:14px;border-bottom:1px solid var(--line);margin-bottom:24px;
+  }
+  h2 .n{font-family:var(--mono);font-size:12px;color:var(--accent);letter-spacing:.1em}
+  h3{font-size:16px;font-weight:600;margin:34px 0 12px;color:var(--ink)}
+  h4{font-size:13px;font-weight:600;margin:22px 0 8px;color:var(--dim);letter-spacing:.02em}
+  p{margin-bottom:14px;color:#cfcbc2}
+  p.small{font-size:13.5px;color:var(--dim)}
+  strong{color:var(--ink);font-weight:600}
+  code{font-family:var(--mono);font-size:.88em;background:#1a1f1d;border:1px solid var(--line);padding:1px 5px;border-radius:3px;color:#d9c9a6}
+  ul,ol{margin:0 0 14px 20px;color:#cfcbc2}
+  li{margin-bottom:7px}
+  li::marker{color:var(--dim2)}
+
+  blockquote{
+    border-left:2px solid var(--accent);
+    padding:2px 0 2px 18px;margin:20px 0;color:var(--dim);
+    font-size:14.5px;
+  }
+
+  .table-wrap{overflow-x:auto;margin:16px 0 22px;border:1px solid var(--line);border-radius:4px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:560px}
+  th{
+    text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--dim2);font-weight:500;padding:11px 14px;background:#101413;border-bottom:1px solid var(--line);white-space:nowrap;
+  }
+  td{padding:11px 14px;border-bottom:1px solid var(--line2);vertical-align:top;color:#cec9c0;line-height:1.65}
+  tr:last-child td{border-bottom:0}
+  td code{background:transparent;border:0;padding:0;color:#d9c9a6}
+  td.id{font-family:var(--mono);font-size:12px;color:var(--accent);white-space:nowrap}
+  td.num{font-family:var(--mono);font-size:12.5px;color:var(--dim);white-space:nowrap}
+
+  .chip{
+    display:inline-block;font-family:var(--mono);font-size:11px;
+    padding:1px 7px;border-radius:2px;border:1px solid;letter-spacing:.02em;line-height:1.7;white-space:nowrap;
+  }
+  .c-easy{color:var(--jade);border-color:#2f4a37;background:#121a15}
+  .c-hard{color:var(--rust);border-color:#4d2f25;background:#1a1310}
+  .c-unk{color:var(--slate);border-color:#33384a;background:#14161c}
+  .c-fog{color:#9fc6d6;border-color:#2b4149;background:#111819}
+  .c-sand{color:#d9c08a;border-color:#4a4130;background:#191610}
+  .c-collapse{color:#cf8a76;border-color:#4a2f28;background:#1a1311}
+  .c-cover{color:#a7b39b;border-color:#3a4335;background:#141814}
+
+  /* layer flow */
+  .flow{margin:22px 0 10px;border-left:1px solid var(--line);padding-left:0}
+  .layer{
+    position:relative;display:grid;grid-template-columns:52px 1fr 250px;gap:20px;
+    padding:20px 22px;background:var(--panel);border:1px solid var(--line);border-radius:4px;margin-bottom:10px;
+  }
+  .layer .ln{
+    font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.08em;
+    border-right:1px solid var(--line);padding-right:14px;
+  }
+  .layer .lt{font-size:15px;font-weight:600;margin-bottom:3px}
+  .layer .ld{font-size:13px;color:var(--dim);line-height:1.65}
+  .layer .lo{font-family:var(--mono);font-size:11.5px;color:#bfae8d;line-height:1.75;border-left:1px solid var(--line);padding-left:18px}
+  .layer .lo span{display:block;color:var(--dim2);font-size:10px;letter-spacing:.14em;margin-bottom:4px}
+  .arrowdown{height:16px;margin-left:26px;border-left:1px solid var(--accent);opacity:.45;margin-bottom:10px}
+
+  /* FR cards */
+  .fr{border:1px solid var(--line);border-radius:4px;margin:22px 0;background:linear-gradient(180deg,#111514,#0e1110)}
+  .fr-head{display:flex;align-items:center;gap:14px;padding:15px 20px;border-bottom:1px solid var(--line)}
+  .fr-id{font-family:var(--mono);font-size:11px;color:var(--accent);border:1px solid #3a3222;background:#17130c;padding:2px 8px;border-radius:2px;letter-spacing:.06em}
+  .fr-title{font-size:15.5px;font-weight:600}
+  .fr-body{padding:6px 20px 18px}
+  .fr-body h4{color:var(--accent);font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;margin:18px 0 6px}
+  .fr-body p{margin-bottom:8px;font-size:14px}
+  .fr-body ul,.fr-body ol{margin-left:18px;font-size:14px}
+
+  /* state machine */
+  .states{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:16px 0 8px}
+  .st{font-family:var(--mono);font-size:11.5px;padding:4px 10px;border:1px solid var(--line);border-radius:2px;color:var(--dim);background:#101413}
+  .st.on{color:var(--accent);border-color:#4a3d24;background:#17130c}
+  .st-arrow{color:var(--dim2);font-family:var(--mono);font-size:12px}
+  .st-note{font-size:12px;color:var(--dim2);font-family:var(--mono)}
+
+  /* demo */
+  .demo{border:1px solid var(--line);border-radius:4px;background:#0c0f0e;margin:22px 0}
+  .demo-top{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line)}
+  .demo-top .dt{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim2)}
+  .demo-top select{
+    background:#141917;color:var(--ink);border:1px solid var(--line);border-radius:2px;
+    font-family:var(--mono);font-size:11.5px;padding:4px 8px;outline:none;
+  }
+  .demo svg{display:block;width:100%;height:auto;background:
+     radial-gradient(120% 90% at 50% 120%,#131a16 0%,#0b0e0d 70%)}
+  .demo-read{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border-top:1px solid var(--line)}
+  .demo-read div{background:#0c0f0e;padding:9px 14px}
+  .demo-read span{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--dim2);text-transform:uppercase;margin-bottom:2px}
+  .demo-read b{font-weight:500;font-size:12.5px;color:#d6d0c4;font-family:var(--mono)}
+  @media(max-width:720px){.demo-read{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+  pre{
+    background:#0e1211;border:1px solid var(--line);border-radius:4px;
+    padding:18px 20px;overflow-x:auto;margin:16px 0 20px;
+    font-family:var(--mono);font-size:12.5px;line-height:1.72;color:#cfc9bd;
+  }
+  pre .k{color:#c9a86a}
+  pre .s{color:#93b58e}
+  pre .c{color:#5c6560}
+
+  .callout{
+    border:1px solid var(--line);border-left:2px solid var(--accent);
+    background:#101413;padding:14px 18px;border-radius:3px;margin:18px 0;font-size:13.5px;color:var(--dim);
+  }
+  .callout b{color:var(--ink)}
+
+  .ac-list{counter-reset:ac;list-style:none;margin-left:0}
+  .ac-list li{
+    counter-increment:ac;position:relative;padding:12px 0 12px 62px;
+    border-bottom:1px solid var(--line2);font-size:14px;color:#cfcbc2;
+  }
+  .ac-list li:last-child{border-bottom:0}
+  .ac-list li::before{
+    content:"AC-" counter(ac,decimal-leading-zero);
+    position:absolute;left:0;top:13px;font-family:var(--mono);font-size:11px;color:var(--accent);
+    letter-spacing:.04em;
+  }
+
+  .q{border-bottom:1px solid var(--line2);padding:14px 0}
+  .q:last-child{border-bottom:0}
+  .q .qh{font-size:14px;font-weight:600;margin-bottom:4px}
+  .q .qh::before{content:"[TBD] ";font-family:var(--mono);font-size:10.5px;color:var(--accent)}
+  .q .qb{font-size:13.5px;color:var(--dim)}
+
+  footer{border-top:1px solid var(--line);padding-top:22px;font-size:12px;color:var(--dim2);font-family:var(--mono);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+
+  @media(max-width:1120px){
+    aside{display:none}
+    main{padding:40px 26px 90px;max-width:none}
+    .meta{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .meta div:nth-child(2){border-right:0}
+    .layer{grid-template-columns:1fr;gap:10px}
+    .layer .ln{border-right:0;border-left:0;padding:0}
+    .layer .lo{border-left:0;border-top:1px solid var(--line);padding:10px 0 0}
+  }
+</style>
+</head>
+<body>
+
+<svg id="contours" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+  <g fill="none" stroke="#d8a24a" stroke-width="1">
+    <ellipse cx="1180" cy="160" rx="360" ry="210" transform="rotate(-14 1180 160)"/>
+    <ellipse cx="1180" cy="160" rx="292" ry="166" transform="rotate(-14 1180 160)"/>
+    <ellipse cx="1180" cy="160" rx="228" ry="126" transform="rotate(-14 1180 160)"/>
+    <ellipse cx="1180" cy="160" rx="164" ry="88" transform="rotate(-14 1180 160)"/>
+    <ellipse cx="1180" cy="160" rx="98" ry="50" transform="rotate(-14 1180 160)"/>
+    <ellipse cx="180" cy="760" rx="430" ry="250" transform="rotate(22 180 760)"/>
+    <ellipse cx="180" cy="760" rx="352" ry="200" transform="rotate(22 180 760)"/>
+    <ellipse cx="180" cy="760" rx="276" ry="152" transform="rotate(22 180 760)"/>
+    <ellipse cx="180" cy="760" rx="200" ry="106" transform="rotate(22 180 760)"/>
+    <ellipse cx="180" cy="760" rx="126" ry="64" transform="rotate(22 180 760)"/>
+  </g>
+</svg>
+
+<div class="shell">
+
+<aside>
+  <div class="brand">PRD / v0.1</div>
+  <div class="brand-sub">地貌删减线 · 动态生成系统</div>
+  <nav id="toc">
+    <a href="#s01"><span class="no">01</span><span>背景与问题</span></a>
+    <a href="#s02"><span class="no">02</span><span>目标</span></a>
+    <a href="#s03"><span class="no">03</span><span>范围</span></a>
+    <a href="#s04"><span class="no">04</span><span>产品模型</span></a>
+    <a href="#s05"><span class="no">05</span><span>功能需求</span></a>
+    <a href="#s06"><span class="no">06</span><span>共享规则</span></a>
+    <a href="#s07"><span class="no">07</span><span>数据契约与示例</span></a>
+    <a href="#s08"><span class="no">08</span><span>异常与边界</span></a>
+    <a href="#s09"><span class="no">09</span><span>验收标准</span></a>
+    <a href="#s10"><span class="no">10</span><span>开放问题</span></a>
+  </nav>
+  <div class="foot">
+    LAYERS 4 / FR 4<br>
+    BASELINE Jobs · 8 nodes<br>
+    LAST EDIT 2026-11-17
+  </div>
+</aside>
+
+<main>
+
+  <div class="eyebrow">产品需求文档 · 常规版</div>
+  <h1>地貌删减线<em>·</em>动态生成系统</h1>
+  <p class="lede">
+    把「一个人走过的路」与「他没走的路」编译成一条可逐帧渲染的地形飞行：主线是山脊，岔路是短暂隆起又消失的支脉，消失之后留下永久疤痕。
+    本文定义这套系统的产品行为、数据契约与验收口径，不定义具体渲染实现。
+  </p>
+
+  <dl class="meta">
+    <div><dt>版本</dt><dd>v1.2 合入 v1.0</dd></div>
+    <div><dt>状态</dt><dd>待评审</dd></div>
+    <div><dt>基线样本</dt><dd>史蒂夫·乔布斯 · 8 节点</dd></div>
+    <div><dt>首要交付</dt><dd>60–90 秒地形叙事短片</dd></div>
+  </dl>
+  <div class="legend">约定：[TBD] 待定 · [A] 假设默认值，需试点片校准 · 所有数值区间均为占位，不作为最终规格</div>
+
+  <!-- ================= 01 ================= -->
+  <section id="s01">
+    <h2><span class="n">01</span>背景与问题</h2>
+
+    <p>人物类短片长期依赖两种表达：一是编年史式的素材堆叠，二是 K 线式的数据可视化。前者讲不出「如果」，后者只能表达涨跌，无法表达<strong>质地</strong>——同样是错过，有的是缓坡上的绕行，有的是悬崖边的失足。</p>
+
+    <p>「地貌删减线」要解决的是第三种表达：<strong>把人生选择的空间性可视化</strong>。主线沿山脊推进；每到关键节点，地形在分叉处分蘖出另一条短命的支脉，代表那条没走的路；支脉按预设方式消失（雾化、风沙、塌陷、被覆盖），消失后在地表留下浅色疤痕。观众看到的不是结论，而是一个被反复删改过的地形。</p>
+
+    <h3>现状与缺口</h3>
+    <ul>
+      <li>渲染能力不是瓶颈：噪声地形、等高线、体积雾、粒子消散都有成熟实现。</li>
+      <li>真正的瓶颈在<strong>数据层</strong>：没有任何公开数据库记录「一个人未选择的路」以及那条路的地形倾向。</li>
+      <li>因此本产品的核心不是特效，而是<strong>一套让叙事判断可以被记录、复用、编译的数据结构与规则库</strong>。</li>
+    </ul>
+
+    <blockquote>系统的壁垒在标注质量，不在渲染。技术管线是通用的，而「那条没走的路在地形上留下什么质感的疤痕」需要每部片子单独做叙事设计。</blockquote>
+  </section>
+
+  <!-- ================= 02 ================= -->
+  <section id="s02">
+    <h2><span class="n">02</span>目标</h2>
+
+    <p>以下是可观察的结果，不是感受性描述。凡涉及数值的，均为 v0.1 的目标口径。</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>#</th><th>目标</th><th>可观察判据</th></tr></thead>
+        <tbody>
+          <tr><td class="id">G1</td><td>人物数据可被地形化</td><td>给定一份人物节点数据，系统无需改代码即可生成主线地形与全部分叉</td></tr>
+          <tr><td class="id">G2</td><td>「未走之路」在画面上可辨识</td><td>每个分叉从触发到支线完全消失的窗口内，两条地形在至少 1 帧上呈现可分辨的坡度或断裂差异</td></tr>
+          <tr><td class="id">G3</td><td>删减留下记忆</td><td>支线消失后，该处疤痕在整个后续镜头中保持可见，不随相机运动丢失</td></tr>
+          <tr><td class="id">G4</td><td>同一输入可复现同一条片子</td><td>相同数据、相同种子、相同帧率下，两次导出的对应帧完全一致</td></tr>
+          <tr><td class="id">G5</td><td>一条数据可产出多条片子</td><td>替换人物数据与种子即可产出新片，元素库预设与编排规则无需重写</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= 03 ================= -->
+  <section id="s03">
+    <h2><span class="n">03</span>范围</h2>
+
+    <h3>P0 · 一条完整链路必须跑通</h3>
+    <ul>
+      <li>单人物、单主线、5–8 个关键节点，其中 3–5 个构成分叉。</li>
+      <li>四类消失模式（雾化、风沙、塌陷、被覆盖）与疤痕层，疤痕在编译期预烘焙。</li>
+      <li>相机沿主线样条推进，分叉使用编译期固定的预设计机位，累积疤痕段减速与回望。</li>
+      <li>文字层：节点信息与「未走之路」标注，与镜头同帧出现，不是后期字幕。</li>
+      <li>帧号驱动渲染，逐帧导出为图片序列，再合成为 60–90 秒成片。</li>
+      <li>人工裁定节点：机器只能产出候选，不能直接进入成片。</li>
+    </ul>
+
+    <h3>P1 · P0 稳定后再做</h3>
+    <ul>
+      <li>从传记文本批量生成候选三元组，辅助标注。</li>
+      <li>元素库的可视化管理（预设的增删改与版本发布）。</li>
+      <li>同一份时间轴指令导出为 DCC 可读格式，供高画质精渲。</li>
+      <li>多人物批量出片与统一片头片尾。</li>
+    </ul>
+
+    <h3>明确不做</h3>
+    <ul>
+      <li><strong>交互式分支浏览</strong>：本产品输出的是视频，不是让观众自己选路的页面。</li>
+      <li><strong>真实地理数据叠加</strong>：地形是隐喻，不绑定真实经纬度。</li>
+      <li><strong>自动生成叙事文案</strong>：「未走之路」的一句话描述必须由人写。</li>
+      <li><strong>自动配乐、配音、发布分发</strong>：属于下游环节。</li>
+    </ul>
+
+    <p class="small">范围取舍的理由：P0 只保证「一份数据 → 一条能看的片子」这条最短闭环成立；任何不服务这条闭环的能力都推迟。</p>
+  </section>
+
+  <!-- ================= 04 ================= -->
+  <section id="s04">
+    <h2><span class="n">04</span>产品模型</h2>
+
+    <p>系统由四个层组成，数据单向流动。每层只对下一层负责，不允许跨层直接取数——这是保证「换人物不出改代码」的前提。</p>
+
+    <div class="flow">
+      <div class="layer">
+        <div class="ln">L1</div>
+        <div>
+          <div class="lt">人物资料库</div>
+          <div class="ld">存节点与删减分支。骨架来自公开知识库，传记细节由机器抽取候选，最终裁定由人完成。</div>
+        </div>
+        <div class="lo"><span>OUTPUT</span>age · main_path<br>alternate_path<br>alternate_terrain<br>disappearance_mode</div>
+      </div>
+      <div class="arrowdown"></div>
+      <div class="layer">
+        <div class="ln">L2</div>
+        <div>
+          <div class="lt">视频元素库</div>
+          <div class="ld">把字段翻译成可复用预设。语义负责「表达什么」，预设负责「长什么样」，两者解耦。</div>
+        </div>
+        <div class="lo"><span>OUTPUT</span>地形预设 · 噪声/坡度/断裂<br>消失预设 · 机制/时长/曲线<br>疤痕预设 · 颜色/法线强度<br>叙事原型 · 岔路默认组合</div>
+      </div>
+      <div class="arrowdown"></div>
+      <div class="layer">
+        <div class="ln">L3</div>
+        <div>
+          <div class="lt">编排层</div>
+          <div class="ld">唯一的大脑。把节点序列编译成带绝对时间的指令流，逐帧确定，可导出。</div>
+        </div>
+        <div class="lo"><span>OUTPUT</span>fork_begin · branch_live<br>branch_dissolve · scar_commit<br>camera_move</div>
+      </div>
+      <div class="arrowdown"></div>
+      <div class="layer">
+        <div class="ln">L4</div>
+        <div>
+          <div class="lt">渲染与合成</div>
+          <div class="ld">只执行指令、查预设，不做叙事判断。输出图片序列，交给合成环节编码。</div>
+        </div>
+        <div class="lo"><span>OUTPUT</span>frame_00001.png …<br>→ MP4（60–90s / 1080p）</div>
+      </div>
+    </div>
+
+    <h3>层间契约</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>边界</th><th>只允许传递</th><th>禁止</th></tr></thead>
+        <tbody>
+          <tr><td>L1 → L3</td><td>已锁定状态的节点记录，字段齐全</td><td>渲染层直接读取资料库；未裁定节点进入编译</td></tr>
+          <tr><td>L2 → L3</td><td>预设标识 + 版本号</td><td>在编排层内联写死地形参数</td></tr>
+          <tr><td>L3 → L4</td><td>绝对时间 + 动作 + 目标节点 + 预设引用</td><td>渲染层自行决定分叉时机或时长</td></tr>
+          <tr><td>L4 → 成片</td><td>按指令顺序渲染的帧序列</td><td>运行时随机数（必须由种子派生）</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="small">这条契约对应一个常见的失败模式：特效参数散落在各处，导致每条片子都要重新调参，无法量产。把参数收进元素库，把时间收进编排层，渲染层就退化成一个可替换的执行器——这也是后续能换 DCC 管线的原因。</p>
+  </section>
+
+  <!-- ================= 05 ================= -->
+  <section id="s05">
+    <h2><span class="n">05</span>功能需求</h2>
+
+    <!-- FR-01 -->
+    <div class="fr">
+      <div class="fr-head"><span class="fr-id">FR-01</span><span class="fr-title">人物资料库：节点与删减分支</span></div>
+      <div class="fr-body">
+        <h4>目的</h4>
+        <p>让「未走之路」成为一条有结构、可审核、可编译的记录，而不是散落在脚本里的旁白。</p>
+
+        <h4>触发</h4>
+        <p>标注员新建人物条目，或从知识库导入骨架后开始补全。</p>
+
+        <h4>处理规则</h4>
+        <ul>
+          <li>系统按公开知识库导入基础三元组（出生、教育、职业、主要事件），生成<strong>草稿</strong>节点。</li>
+          <li>系统可从传记文本抽取候选事件，但只能标记为<strong>候选</strong>，并在界面上与人工录入区分显示。</li>
+          <li>每个节点必须补齐三件事才能提交：主线选择、未走之路的一句话描述、那条路的地形倾向。</li>
+          <li><code>alternate_terrain</code> 只接受三个枚举：<span class="chip c-easy">坦途</span> <span class="chip c-hard">险路</span> <span class="chip c-unk">未知</span>。允许在此之外附加坡度/粗糙度倾向作为细化，但不作为必填。</li>
+          <li><code>disappearance_mode</code> 只接受四个枚举：<span class="chip c-fog">雾化</span> <span class="chip c-sand">风沙</span> <span class="chip c-collapse">塌陷</span> <span class="chip c-cover">被覆盖</span>。</li>
+          <li>节点必须处于<strong>已锁定</strong>状态才允许进入编排编译；锁定动作由人工执行，且记录执行人。</li>
+        </ul>
+
+        <h4>结果与状态</h4>
+        <p>保存后节点进入资料库，状态为草稿或候选。锁定后该节点的叙事字段不可直接编辑，修改需先解锁并留下修改记录。</p>
+
+        <h4>字段</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>字段</th><th>含义</th><th>取值 / 规则</th><th>必填</th></tr></thead>
+            <tbody>
+              <tr><td><code>id</code></td><td>节点标识</td><td>N01 起顺序编号，全片唯一</td><td>是</td></tr>
+              <tr><td><code>year</code> / <code>age</code></td><td>时间锚点</td><td>年份与当时年龄，二者需互相吻合</td><td>是</td></tr>
+              <tr><td><code>title</code></td><td>节点名</td><td>不超过 14 字，用于字幕与校验</td><td>是</td></tr>
+              <tr><td><code>main_path</code></td><td>主线选择</td><td>一句话，过去时</td><td>是</td></tr>
+              <tr><td><code>alternate_path</code></td><td>未走之路</td><td>一句话，必须具体到行为，禁止「另一种人生」这类空话</td><td>是</td></tr>
+              <tr><td><code>alternate_terrain</code></td><td>支线地形倾向</td><td>坦途 / 险路 / 未知</td><td>是</td></tr>
+              <tr><td><code>delta</code></td><td>该节点的人生数值变化</td><td>起点固定 100，按节点顺序累加得到 <code>value</code>；<code>value</code> 归一化后直接决定该节点处地形高度，等价于 K 线收盘价</td><td>是</td></tr>
+              <tr><td><code>disappearance_mode</code></td><td>消失方式</td><td>雾化 / 风沙 / 塌陷 / 被覆盖</td><td>是</td></tr>
+              <tr><td><code>scar_intensity</code></td><td>疤痕强度</td><td>1–3 整数，决定贴花透明度与回望权重</td><td>是</td></tr>
+              <tr><td><code>fork_camera</code></td><td>分叉机位预设</td><td>侧移拉远 / 高位斜看 / 回望，编译期固定</td><td>否</td></tr>
+              <tr><td><code>duration</code></td><td>支线存续时长</td><td>默认 2.4–2.7 秒，允许范围 2–4 秒</td><td>否</td></tr>
+              <tr><td><code>scar_preset</code></td><td>疤痕预设</td><td>引用已发布预设，缺省用 pale-decal</td><td>否</td></tr>
+              <tr><td><code>source</code></td><td>来源</td><td>知识库标识或文献出处；人工撰写可标注「叙事设计」</td><td>是</td></tr>
+              <tr><td><code>status</code></td><td>裁定状态</td><td>草稿 / 候选 / 已裁定 / 已锁定</td><td>是</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>例外</h4>
+        <ul>
+          <li>缺 <code>alternate_path</code> 的节点视为「无岔路节点」，允许存在，但不产生分叉，只在主线上形成坡形变化。</li>
+          <li>年份不单调递增时阻断提交，提示具体节点对。</li>
+          <li>同一人物两条支线描述高度重复时给出提示，不阻断。</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- FR-02 -->
+    <div class="fr">
+      <div class="fr-head"><span class="fr-id">FR-02</span><span class="fr-title">视频元素库：地形与消失的映射</span></div>
+      <div class="fr-body">
+        <h4>目的</h4>
+        <p>把「这条路有多难」「这段记忆怎么没的」变成可复用、可版本化、可批量替换的预设，避免每条片子重新调参。</p>
+
+        <h4>处理规则</h4>
+        <ul>
+          <li>元素库分三类预设：<strong>地形预设</strong>（基底噪声、坡度、断裂密度）、<strong>消失预设</strong>（机制、时长、透明度/位移曲线）、<strong>疤痕预设</strong>（颜色、宽度、法线扰动强度）。</li>
+          <li>语义到参数的方向映射是固定的（见 06.2），预设只负责具体数值与视觉风格。</li>
+          <li>预设一旦被某条成片引用，其修改必须生成新版本；已锁定的成片继续引用旧版本。禁止原地覆盖已被引用的预设。</li>
+          <li>同一人物使用固定种子，保证其地貌可复现；种子属于成片配置，不属于预设。</li>
+          <li>预设一律不可变：修改即生成新版本，不提供原地编辑已发布预设的入口。</li>
+        </ul>
+
+        <h4>叙事原型（第三类资产）</h4>
+        <p>参数可复用，判断不可复用。原型库把「这段岔路怎么演」固化下来：一条岔路引用一个原型，再按需覆盖个别字段，避免每条片子从零编排。</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>原型</th><th>适用岔路</th><th>地形倾向</th><th>消失</th><th>机位</th><th>停留</th></tr></thead>
+            <tbody>
+              <tr><td>逃离型</td><td>主动离开既有轨道</td><td><span class="chip c-hard">险路</span></td><td><span class="chip c-collapse">塌陷</span></td><td>侧视 + 拉远</td><td class="num">2.0s</td></tr>
+              <tr><td>被驯化型</td><td>留下、妥协、接受安排</td><td><span class="chip c-easy">坦途</span></td><td><span class="chip c-cover">被覆盖</span></td><td>俯视</td><td class="num">3.0s</td></tr>
+              <tr><td>侥幸型</td><td>偶然撞上的岔路</td><td><span class="chip c-unk">未知</span></td><td><span class="chip c-fog">雾化</span></td><td>平视侧移</td><td class="num">2.0s</td></tr>
+              <tr><td>迟到的回头</td><td>多年后才补上的选择</td><td><span class="chip c-hard">险路</span></td><td><span class="chip c-sand">风沙</span></td><td>回望</td><td class="num">4.0s</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small">原型只提供默认组合，节点字段优先；冲突时以节点为准，并在编译报告中标注被覆盖的字段。</p>
+
+        <h4>结果与状态</h4>
+        <p>预设状态为草稿或已发布。只有已发布预设可被编排层引用。已发布预设被引用后，其版本号冻结。</p>
+
+        <h4>例外</h4>
+        <ul>
+          <li>引用的预设被删除时，引用该预设的成片进入「待修复」，并在编译时报出节点与预设标识。</li>
+          <li>预设时长超过支线可用时长时，以节点间隔为准裁剪，不延长镜头。</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- FR-03 -->
+    <div class="fr">
+      <div class="fr-head"><span class="fr-id">FR-03</span><span class="fr-title">编排层：把节点编译成时间轴</span></div>
+      <div class="fr-body">
+        <h4>目的</h4>
+        <p>把节点序列翻译成一条<strong>逐帧确定</strong>的指令流，让渲染层不需要理解叙事，也让同一输入可以重复产出同一结果。</p>
+
+        <h4>触发</h4>
+        <p>用户在已锁定的节点集合上执行「编译」。编译不产生画面，只产生指令时间轴。</p>
+
+        <h4>处理规则</h4>
+        <ul>
+          <li>编译前校验：所有节点为已锁定、必填字段齐全、引用的预设均为已发布。任一不满足即中断，并列出节点标识与缺失项，不产出半成品时间轴。</li>
+          <li>主线总时长由节点数量与镜头节奏系数决定，目标 60–90 秒；超出时不自动压缩，提示拆分或删减节点。</li>
+          <li>分叉节点生成一组固定动作：<code>fork_begin</code>（支线地形出现 + 相机侧移拉远）→ <code>branch_live</code>（支线存续）→ <code>branch_dissolve</code>（按消失预设执行）→ <code>scar_commit</code>（疤痕写入持久层）。</li>
+          <li>支线存续期默认为 2–4 秒，具体值按节点间隔自适应；存续期不得与前一分叉的动作窗口重叠。</li>
+          <li>相机在主线段使用样条推进；分叉处使用该分叉的预设计机位——每个分叉预置 2–3 个候选，编译期校验不穿模后固定一个，运行时不搜索样条变体。疤痕累积段降速，疤痕强度最高档的节点之后插入回望。</li>
+          <li>文字指令与镜头同批生成，文字出现帧与 <code>fork_begin</code> 对齐，时长在编译期固定。</li>
+          <li>同一节点重复编译必须得到相同指令序列（字节一致），时间不得依赖当前系统时间或随机数。</li>
+        </ul>
+
+        <h4>结果与状态</h4>
+        <p>产出时间轴后，成片进入「已编译」。指令流以绝对时间标注每个动作的起止帧，可直接交给渲染层逐帧执行。</p>
+
+        <h4>动作与时间</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>指令</th><th>作用对象</th><th>典型时长</th><th>备注</th></tr></thead>
+            <tbody>
+              <tr><td><code>camera_move</code></td><td>相机</td><td>连续</td><td>样条推进，分叉处插入侧视</td></tr>
+              <tr><td><code>fork_begin</code></td><td>地形 / 相机</td><td>[A] 0.8–1.2s</td><td>局部二分高度场，同时侧移拉远</td></tr>
+              <tr><td><code>branch_live</code></td><td>地形</td><td>[A] 2–4s</td><td>支线保持可辨认的独立坡度</td></tr>
+              <tr><td><code>branch_dissolve</code></td><td>地形 / 特效</td><td>由预设决定</td><td>引用消失预设，四种机制之一</td></tr>
+              <tr><td><code>scar_commit</code></td><td>持久层</td><td>瞬时</td><td>写入后不再被后续镜头清除</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h4>交互示意 · 单次分叉的时序演算</h4>
+        <p class="small">仅演示时序与状态切换，不代表最终画面。切换消失模式可观察同一分叉的时间结构变化。</p>
+
+        <div class="demo">
+          <div class="demo-top">
+            <div class="dt">Fork Timeline · N06 被逐出苹果</div>
+            <select id="modeSel" aria-label="消失模式">
+              <option value="fog">消失模式：雾化</option>
+              <option value="sand">消失模式：风沙</option>
+              <option value="collapse">消失模式：塌陷</option>
+              <option value="cover">消失模式：被覆盖</option>
+            </select>
+          </div>
+          <svg id="demoSvg" viewBox="0 0 1000 190" role="img" aria-label="分叉时间轴示意">
+            <defs>
+              <linearGradient id="ridge" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#3d5a45"/>
+                <stop offset="100%" stop-color="#16201a"/>
+              </linearGradient>
+              <linearGradient id="branchG" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#6f8a6a"/>
+                <stop offset="100%" stop-color="#1d2620"/>
+              </linearGradient>
+              <filter id="soft"><feGaussianBlur stdDeviation="3"/></filter>
+            </defs>
+
+            <!-- baseline -->
+            <line x1="0" y1="160" x2="1000" y2="160" stroke="#242a27" stroke-width="1"/>
+            <!-- main ridge -->
+            <path d="M0,150 L80,138 L160,142 L240,126 L320,132 L400,110 L470,118 L540,96 L610,104 L690,86 L760,94 L840,74 L910,82 L1000,64 L1000,190 L0,190 Z" fill="url(#ridge)" opacity=".92"/>
+            <path d="M0,150 L80,138 L160,142 L240,126 L320,132 L400,110 L470,118 L540,96 L610,104 L690,86 L760,94 L840,74 L910,82 L1000,64" fill="none" stroke="#8fae92" stroke-width="1.4" opacity=".7"/>
+
+            <!-- fork branch -->
+            <g id="branch" transform="translate(560,0)">
+              <path d="M0,104 C40,100 62,88 84,92 C104,96 120,108 138,116 L138,190 L0,190 Z" fill="url(#branchG)" opacity=".95"/>
+              <path d="M0,104 C40,100 62,88 84,92 C104,96 120,108 138,116" fill="none" stroke="#a6c49f" stroke-width="1.3" opacity=".85"/>
+              <g id="sandDots" opacity="0"></g>
+            </g>
+
+            <!-- scar -->
+            <path id="scar" d="M560,104 C600,100 622,88 644,92 C664,96 680,108 698,116" fill="none" stroke="#e0cba0" stroke-width="3" opacity="0" stroke-linecap="round"/>
+            <path id="scar2" d="M566,110 C602,107 624,96 646,100 C664,104 678,112 694,119" fill="none" stroke="#c8b184" stroke-width="1" opacity="0" stroke-dasharray="4 5"/>
+
+            <!-- node ticks -->
+            <g id="ticks" opacity=".55"></g>
+
+            <!-- playhead -->
+            <line id="playhead" x1="0" y1="8" x2="0" y2="172" stroke="#d8a24a" stroke-width="1.2" opacity=".9"/>
+            <circle id="phDot" cx="0" cy="8" r="2.6" fill="#d8a24a"/>
+          </svg>
+          <div class="demo-read">
+            <div><span>阶段</span><b id="rPhase">主线推进</b></div>
+            <div><span>时间</span><b id="rTime">t = 0.0s</b></div>
+            <div><span>相机</span><b id="rCam">样条推进</b></div>
+            <div><span>疤痕层</span><b id="rScar">未写入</b></div>
+          </div>
+        </div>
+
+        <h4>例外</h4>
+        <ul>
+          <li>可辨分叉少于 3 个时，编译成功但提示「岔路密度过低，叙事可能趋于平缓」。</li>
+          <li>节点间隔不足以容纳分叉动作时，自动压缩支线存续期，并在编译报告中列出被压缩的节点。</li>
+          <li>编译中断不保留任何中间产物，避免误用半成品时间轴。</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- FR-04 -->
+    <div class="fr">
+      <div class="fr-head"><span class="fr-id">FR-04</span><span class="fr-title">渲染与合成</span></div>
+      <div class="fr-body">
+        <h4>目的</h4>
+        <p>把时间轴变成画面。渲染层是可替换的执行器：换实现不换上游数据。</p>
+
+        <h4>处理规则</h4>
+        <ul>
+          <li>渲染层只做三件事：按指令形变地形、按指令移动相机、按指令播放消失特效并写入疤痕。</li>
+          <li>疤痕在编译期预烘焙为独立记忆层（高度、法线、色），渲染时只按时间混合透明度，不做运行期写入。重渲任意片段，疤痕状态都与从头渲染一致。</li>
+          <li>渲染由帧号驱动：第 n 帧固定为 <code>t = n / fps</code>，设置时间轴时间、强制渲染、读回像素，不依赖真实时钟，也不依赖帧间状态。</li>
+          <li>逐帧导出，帧号从 00001 连续递增，帧率在成片配置中固定；中途失败可从最后一帧续渲，续渲结果必须与未中断时一致。</li>
+          <li>合成阶段只做编码与封装，不改变画面内容；成片规格为 1080p、24 或 30fps、60–90 秒。</li>
+        </ul>
+
+        <h4>结果与状态</h4>
+        <p>成片状态依次为：待编译 → 已编译 → 渲染中 → 已合成。渲染中断保留已完成帧并标记断点；合成失败可仅重跑合成，不重渲帧。</p>
+
+        <h4>两条实现路线（同一上游，选择权在下游）</h4>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>维度</th><th>Web 渲染管线</th><th>DCC 渲染管线</th></tr></thead>
+            <tbody>
+              <tr><td>定位</td><td>P0 主力，面向量产与快速迭代</td><td>P1，面向标杆片精渲</td></tr>
+              <tr><td>输入</td><td>同一份时间轴指令</td><td>由同一份指令转换的关键帧与位移权重</td></tr>
+              <tr><td>优势</td><td>纯代码、零外部资产、参数可运行时注入</td><td>画质上限高，材质与光照表现更强</td></tr>
+              <tr><td>代价</td><td>复杂材质与体积效果受限</td><td>迭代慢，自动化程度低，不适合批量</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small">务实策略：用 Web 管线出预览与初稿，同一条时间轴对需要电影级质感的条目再走精渲。两套管线共享上游，不重复劳动。</p>
+
+        <h4>例外</h4>
+        <ul>
+          <li>渲染过程中预设被修改：当前任务继续使用启动时锁定的版本，不热更新。</li>
+          <li>帧序列缺帧时合成中断并报出首个缺失帧号，不生成带空帧的成片。</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- FR-05 -->
+    <div class="fr">
+      <div class="fr-head"><span class="fr-id">FR-05</span><span class="fr-title">文字层：让画面可被读懂</span></div>
+      <div class="fr-body">
+        <h4>目的</h4>
+        <p>地形承担情绪，文字承担语义。没有文字层时，观众看到的只是一段地形形变；有了节点信息与「未走之路」的并行标注，删减才可被识别。文字属于时间轴，不是后期字幕。</p>
+
+        <h4>触发</h4>
+        <p>编排层编译时为每个节点生成文字指令，与镜头同批产出、同批锁定。</p>
+
+        <h4>处理规则</h4>
+        <ul>
+          <li>节点进入画面时显示：年份与年龄、节点名、主线一句话。</li>
+          <li>分叉节点的「未走之路」与 <code>fork_begin</code> 同帧出现，与支线共存亡；支线消失后文字淡出，不常驻。</li>
+          <li>疤痕段不显示长篇文字，仅在回望镜头中短暂复现节点名，作为记忆索引。</li>
+          <li>文字固定在安全区（默认左下），不得覆盖分叉区域；分叉侧视时安全区随镜头切换。</li>
+          <li>文字停留时长不短于 2 秒，且不短于该节点镜头时长的 40%，保证可读完。</li>
+        </ul>
+
+        <h4>结果与状态</h4>
+        <p>文字指令随成片配置一同锁定；改文案即视为输入变化，必须重新编译时间轴。</p>
+
+        <h4>例外</h4>
+        <ul>
+          <li><code>alternate_path</code> 超过 32 字时最多折两行，仍超出则阻断编译并提示改写。</li>
+          <li>无岔路节点不显示「未走」行，只保留主线文字。</li>
+          <li>文字早于 <code>fork_begin</code> 出现视为缺陷，不允许先剧透再出现地形。</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- FR-06 -->
+    <div class="fr">
+      <div class="fr-head"><span class="fr-id">FR-06</span><span class="fr-title">主线光点与结尾根系</span></div>
+      <div class="fr-body">
+        <h4>目的</h4>
+        <p>让「走过的主线」本身可见，并在结尾把散落的删减收束成一张可读的地形记忆。这是把「地貌」从背景变成叙述者的关键。</p>
+
+        <h4>处理规则</h4>
+        <ul>
+          <li>光点贴地推进，高度随地表起伏；已走过的路径整条发亮，作为画面中唯一发亮的河道。</li>
+          <li>推进节奏按坡度加权：越陡越慢；断崖类节点处短暂驻留，不做匀速平移。</li>
+          <li>分叉时支线上出现一个更暗、更冷的对照光点，与支线同生同灭；主线光点不进入支线。</li>
+          <li>支线消失后，对照光点的路径降为贴地暗线，与疤痕一起构成「根系」。</li>
+          <li>结尾固定插入拉远镜头：相机升高并后退，视野覆盖全片主线，时长 6–10 秒。</li>
+          <li>结尾镜头只做空间收束，不新增信息；文字只保留一句总结。</li>
+        </ul>
+
+        <h4>结果与状态</h4>
+        <p>光点进度与结尾镜头都属于时间轴，参与确定性校验；跳段重渲时位置必须一致。</p>
+
+        <h4>例外</h4>
+        <ul>
+          <li>地形不足以容纳全片视野时，允许抬高相机并放宽视角，但不得穿入地形。</li>
+          <li>光点在节点处驻留过长时，压缩下一段推进，不顺延分叉窗口。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 06 ================= -->
+  <section id="s06">
+    <h2><span class="n">06</span>共享规则</h2>
+
+    <h3>6.1 状态</h3>
+
+    <h4>节点状态</h4>
+    <div class="states">
+      <span class="st">草稿</span><span class="st-arrow">→</span>
+      <span class="st">候选</span><span class="st-arrow">→</span>
+      <span class="st on">已裁定</span><span class="st-arrow">→</span>
+      <span class="st on">已锁定</span>
+    </div>
+    <p class="small">只有「已锁定」参与编译；「已裁定」可编辑；任何状态都可退回草稿，退回时清空锁定人记录。机器抽取只能产生「候选」，不能跳到「已裁定」。</p>
+
+    <h4>成片状态</h4>
+    <div class="states">
+      <span class="st">待编译</span><span class="st-arrow">→</span>
+      <span class="st">已编译</span><span class="st-arrow">→</span>
+      <span class="st">渲染中</span><span class="st-arrow">→</span>
+      <span class="st on">已合成</span>
+    </div>
+    <p class="small">「渲染中」可因中断回落到「已编译」并保留断点帧号；已合成后修改任一锁定节点，成片转为「待编译」，旧成片文件保留不覆盖。</p>
+
+    <h3>6.2 地形语义映射</h3>
+    <p>语义决定方向，预设决定数值。以下为方向的固定约定，数值区间为占位默认值。</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>语义</th><th>影响参数</th><th>方向约定</th></tr></thead>
+        <tbody>
+          <tr><td>阻力</td><td>该段主线坡度</td><td>越大越陡，等高线越密</td></tr>
+          <tr><td>消耗</td><td>地表粗糙度、噪声倍频</td><td>越大越碎，细节越密</td></tr>
+          <tr><td>转折</td><td>断裂线密度、断崖高差</td><td>转折越强，断崖越多</td></tr>
+          <tr><td>停滞</td><td>起伏幅度、等高线间距</td><td>越停滞越平缓稀疏</td></tr>
+          <tr><td class="num"><span class="chip c-easy">坦途</span></td><td>支线坡度、表面断裂</td><td>低坡度、低粗糙、路径连续；用平顶台地拉开轮廓，避免与主脊混在一起</td></tr>
+          <tr><td class="num"><span class="chip c-hard">险路</span></td><td>支线坡度、断裂密度</td><td>高坡度、高断裂、边缘锐利</td></tr>
+          <tr><td class="num"><span class="chip c-unk">未知</span></td><td>坡度、能见度</td><td>中等坡度、强表面噪声、能见度低，轮廓不可读</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="small">分叉地形的生成方式：以分叉点为圆心、向支线方向辐射有限半径，对主线高度场做局部二分，支线剖面按上表参数生成。支线不单独建模，避免与主线拼接出现裂缝。</p>
+
+    <h3>6.3 消失模式与疤痕</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>模式</th><th>机制</th><th>默认时长</th><th>结束形态</th></tr></thead>
+        <tbody>
+          <tr><td><span class="chip c-fog">雾化</span></td><td>透明度衰减 + 体积雾包裹</td><td>[A] 3.0s</td><td>地形归零，留浅色轮廓线</td></tr>
+          <tr><td><span class="chip c-sand">风沙</span></td><td>粒子沿坡面剥离，顶点轻微抖动</td><td>[A] 3.0s</td><td>残留散点与磨圆边缘</td></tr>
+          <tr><td><span class="chip c-collapse">塌陷</span></td><td>高度场下沉，边缘拉裂</td><td>[A] 2.5s</td><td>凹槽，两侧留断裂壁</td></tr>
+          <tr><td><span class="chip c-cover">被覆盖</span></td><td>新地表覆盖旧地形（植被/沉积）</td><td>[A] 4.0s</td><td>浅色贴花，纹理差异可见</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><strong>疤痕规则：</strong>四种模式结束后都落入疤痕层，不做例外。疤痕强度取值为 1–3，对应贴花透明度三档，默认 0.15 / 0.30 / 0.45 [A]。疤痕在编译期一次性预烘焙成记忆层，渲染时按 <code>scar_commit</code> 的绝对时间切换可见性，运行期只读不写；同一分叉点重复编译不得叠加多层疤痕，重渲任意片段结果一致。</p>
+
+    <h3>6.4 相机规则</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>条件</th><th>行为</th></tr></thead>
+        <tbody>
+          <tr><td>常规推进</td><td>沿主线样条，速度按节点间距自适应</td></tr>
+          <tr><td>视觉风格</td><td>赛博全息：深蓝底、青色等高线能量环、冷紫岩壁、世界坐标网格；主线与光点强制暖金色，靠冷暖对比把「唯一的路」从地貌里拎出来</td></tr>
+          <tr><td>粒子</td><td>1400 颗悬浮尘埃（上升 + 闪烁）铺满空间，220 颗金色火星绕光点旋转上升；全部由 <code>t</code> 推导，不引入随机状态</td></tr>
+          <tr><td>背景音乐</td><td>单轨背景乐，随播放头起停：播放即起、暂停即停、拖动后按新时间点续播；默认音量 0.42，可一键静音。成片由 ffmpeg 与帧序列混流，不参与逐帧确定性校验</td></tr>
+          <tr><td>数值→高度映射</td><td><code>value</code> 归一化区间取 74–140（<code>V_MIN=74, V_SPAN=66</code>），高度 = <code>3 + 46×norm</code> + 噪声扰动；即 100 分的人生对应约 22 单位，±40 的变化就能造出 25 单位以上的落差，峰谷差可达 45 单位，用于制造「巨变」的视觉冲击</td></tr>
+          <tr><td>机位高度与焦段</td><td>分叉窗口用预设计机位：离地 6–12 单位、视角 40°；<code>|delta| ≥ 40</code> 的巨变节点改用 <code>plunge</code> 机位——站在跌落起点，高出当地地表 30 单位俯看整段落差。高度按当地地表相对计算，峰顶与谷底获得同样的构图</td></tr>
+          <tr><td>POV 视点</td><td>主线推进时切第一人称：相机置于光点后方约 13 单位、离地 3.2 单位，注视前方 21 单位的路径点，视角 66°，带 0.12 单位呼吸浮动；分叉窗口前后 0.5 秒用平滑权重退回预设计机位，结尾拉远强制回第三人称</td></tr>
+          <tr><td>进入分叉</td><td>从该分叉预置的 2–3 个机位中固定一个，通常侧移 15°–25° 并拉远至 1.2 倍，使两条地形同时入画；机位在编译期校验不穿模，运行时不改</td></tr>
+          <tr><td>疤痕累积段</td><td>速度降至 0.6 倍</td></tr>
+          <tr><td>疤痕强度为 3 的节点之后</td><td>插入一次短暂回望，回望时疤痕必须在画面内</td></tr>
+          <tr><td>全程约束</td><td>相机与地表保持最小间距，不得穿入地形；无可行解时抬高相机而非穿模</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>6.5 可复现性</h3>
+    <ul>
+      <li>地形随机性全部由成片种子派生，禁止运行时取系统随机数或系统时间。</li>
+      <li>渲染按帧号推进：第 n 帧对应固定时间，暂停、续渲、跳段都不能改变该帧内容。</li>
+      <li>同一人物使用固定种子，因此同一人物的地貌在多次成片中保持同一张脸。</li>
+      <li>相同数据 + 相同种子 + 相同帧率，两次导出的对应帧必须一致；容器层面的编码差异不算违反。</li>
+      <li>元素库预设的版本号参与确定性校验：版本变化即视为输入变化。</li>
+    </ul>
+
+    <h3>6.6 命名与引用</h3>
+    <ul>
+      <li>节点标识全片唯一，形如 <code>N01</code>；跨片复用同一人物时以人物标识前缀区分。</li>
+      <li>时间轴指令必须携带目标节点标识与预设标识，不允许只写绝对帧号而无归属。</li>
+      <li>字幕、编译报告、验收记录统一使用节点标识，不使用序号描述（如「第五个点」）。</li>
+    </ul>
+  </section>
+
+  <!-- ================= 07 ================= -->
+  <section id="s07">
+    <h2><span class="n">07</span>数据契约与示例</h2>
+
+    <p>以下为 v0.1 的字段契约，以乔布斯的 8 个节点作为基线样本。节点按时间顺序，其中 6 个构成分叉，2 个为无岔路节点（仅形成坡形变化）。</p>
+
+    <h3>样本节点总表</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>ID</th><th>年 / 岁</th><th>节点</th><th>主线</th><th>未走之路</th><th>地形</th><th>消失</th><th>疤痕</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="id">N01</td><td class="num">1972 / 17</td><td>入读里德学院</td>
+            <td>离开硅谷，进入俄勒冈的里德学院</td>
+            <td>留在加州读州立大学，按部就班毕业</td>
+            <td><span class="chip c-easy">坦途</span></td><td><span class="chip c-cover">被覆盖</span></td><td class="num">1</td>
+          </tr>
+          <tr>
+            <td class="id">N02</td><td class="num">1973 / 18</td><td>退学，旁听书法</td>
+            <td>退学但留在学校，以旁听生身份修书法课</td>
+            <td>拿到学位，进入大公司做稳定工程师</td>
+            <td><span class="chip c-easy">坦途</span></td><td><span class="chip c-fog">雾化</span></td><td class="num">2</td>
+          </tr>
+          <tr>
+            <td class="id">N03</td><td class="num">1974 / 19</td><td>印度之行</td>
+            <td>赴印度寻访灵修，回来后剃度般清空自己</td>
+            <td>留在游戏公司继续做技术员，攒钱读研</td>
+            <td><span class="chip c-unk">未知</span></td><td><span class="chip c-sand">风沙</span></td><td class="num">2</td>
+          </tr>
+          <tr>
+            <td class="id">N04</td><td class="num">1976 / 21</td><td>车库里的苹果</td>
+            <td>卖车与计算器凑钱，与沃兹尼亚克创办苹果</td>
+            <td>留在大公司做一份稳定的工程师工作</td>
+            <td><span class="chip c-easy">坦途</span></td><td><span class="chip c-collapse">塌陷</span></td><td class="num">3</td>
+          </tr>
+          <tr>
+            <td class="id">N05</td><td class="num">1984 / 29</td><td>Macintosh 发布</td>
+            <td>押注图形界面，把电脑做成「给普通人用的工具」</td>
+            <td>转入企业产品线，走大客户与规格竞争路线</td>
+            <td><span class="chip c-unk">未知</span></td><td><span class="chip c-fog">雾化</span></td><td class="num">2</td>
+          </tr>
+          <tr>
+            <td class="id">N06</td><td class="num">1985 / 30</td><td>被逐出苹果</td>
+            <td>辞去职务，带五人小组创办 NeXT</td>
+            <td>接受降职，交出部门控制权，留在苹果</td>
+            <td><span class="chip c-hard">险路</span></td><td><span class="chip c-collapse">塌陷</span></td><td class="num">3</td>
+          </tr>
+          <tr>
+            <td class="id">N07</td><td class="num">1986 / 31</td><td>买下图形部门</td>
+            <td>从卢卡斯影业买下计算机图形部门，独立为 Pixar</td>
+            <td>拒绝这笔烧钱交易，全部资源押在 NeXT</td>
+            <td><span class="chip c-hard">险路</span></td><td><span class="chip c-sand">风沙</span></td><td class="num">3</td>
+          </tr>
+          <tr>
+            <td class="id">N08</td><td class="num">1996 / 41</td><td>回归苹果</td>
+            <td>NeXT 被苹果收购，以顾问身份回归，随后出任临时 CEO</td>
+            <td>留在 NeXT 与 Pixar，不再回到那家公司</td>
+            <td><span class="chip c-unk">未知</span></td><td><span class="chip c-cover">被覆盖</span></td><td class="num">3</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="small">样本说明：N03 与 N05 的描述为叙事设计，不追求史料级精确；<code>source</code> 字段应分别标注为「叙事设计」。正式生产时，每条 <code>alternate_path</code> 的责任人需登记在案。</p>
+
+    <h3>单节点记录示例</h3>
+    <pre>{
+  <span class="k">"id"</span>: <span class="s">"N06"</span>,
+  <span class="k">"year"</span>: 1985,
+  <span class="k">"age"</span>: 30,
+  <span class="k">"title"</span>: <span class="s">"被逐出苹果"</span>,
+  <span class="k">"main_path"</span>: <span class="s">"辞去职务，带五人小组创办 NeXT"</span>,
+  <span class="k">"alternate_path"</span>: <span class="s">"接受降职，交出部门控制权，留在苹果"</span>,
+  <span class="k">"alternate_terrain"</span>: <span class="s">"险路"</span>,
+  <span class="k">"delta"</span>: <span class="n">-60</span>,
+  <span class="k">"disappearance_mode"</span>: <span class="s">"塌陷"</span>,
+  <span class="k">"scar_intensity"</span>: 3,
+  <span class="k">"fork_camera"</span>: <span class="s">"side-pull"</span>,
+  <span class="k">"duration"</span>: 2.7,
+  <span class="k">"scar_preset"</span>: <span class="s">"pale-decal"</span>,
+  <span class="k">"source"</span>: <span class="s">"叙事设计"</span>,
+  <span class="k">"status"</span>: <span class="s">"已锁定"</span>
+}</pre>
+
+    <h3>成片配置示例</h3>
+    <pre>{
+  <span class="k">"person"</span>: <span class="s">"P-JOBS"</span>,
+  <span class="k">"seed"</span>: <span class="s">"jobs-1985"</span>,          <span class="c">// 固定种子，决定地貌长相</span>
+  <span class="k">"fps"</span>: 30,
+  <span class="k">"resolution"</span>: [1920, 1080],
+  <span class="k">"duration_target"</span>: [60, 90],
+  <span class="k">"presets"</span>: {
+    <span class="k">"terrain"</span>: <span class="s">"ridge-mono@1.2"</span>,
+    <span class="k">"disappearance"</span>: <span class="s">"default-modes@1.0"</span>,
+    <span class="k">"scar"</span>: <span class="s">"pale-decal@1.1"</span>
+  },
+  <span class="k">"nodes"</span>: [<span class="s">"N01"</span>, <span class="s">"N02"</span>, <span class="s">"N03"</span>, <span class="s">"N04"</span>,
+            <span class="s">"N05"</span>, <span class="s">"N06"</span>, <span class="s">"N07"</span>, <span class="s">"N08"</span>]
+}</pre>
+  </section>
+
+  <!-- ================= 08 ================= -->
+  <section id="s08">
+    <h2><span class="n">08</span>异常与边界</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>场景</th><th>系统行为</th></tr></thead>
+        <tbody>
+          <tr><td>节点未锁定即编译</td><td>阻断编译，列出未锁定节点标识</td></tr>
+          <tr><td>缺少未走之路描述</td><td>视为无岔路节点，编译通过但报告中单独列出</td></tr>
+          <tr><td>地形或消失枚举值非法</td><td>阻断，指向具体字段与节点</td></tr>
+          <tr><td>年份或年龄不单调</td><td>阻断提交，提示冲突节点对</td></tr>
+          <tr><td>分叉过密导致动作重叠</td><td>按节点间隔压缩支线存续期，报告中被压缩的节点</td></tr>
+          <tr><td>总时长超出 90 秒</td><td>不自动压缩，提示拆分或删减节点</td></tr>
+          <tr><td>引用预设被删除</td><td>成片转「待修复」，编译报出节点与预设标识</td></tr>
+          <tr><td>渲染中断</td><td>保留已完成帧，从最后一帧续渲，不整条重跑</td></tr>
+          <tr><td>帧序列缺帧</td><td>合成中断并报出首个缺失帧号，不产出带空帧的成片</td></tr>
+          <tr><td>疤痕被后续镜头遮挡</td><td>视为缺陷：回望镜头必须能看见疤痕，否则调整相机而非移除疤痕</td></tr>
+          <tr><td>「未走之路」文案超长</td><td>最多折两行；仍超长则阻断编译，提示改写文案</td></tr>
+          <tr><td>叙事授权未确认</td><td>阻断编译、不出片。这是硬门禁，不走「先出片后补授权」</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= 09 ================= -->
+  <section id="s09">
+    <h2><span class="n">09</span>验收标准</h2>
+    <p>以下条目用于判定 P0 是否达成。除 AC-11 为主观试映项外，其余均可由导出物或编译报告直接核验。</p>
+    <ol class="ac-list">
+      <li>使用基线 8 节点数据编译，输出时间轴且无缺字段、无未锁定节点，编译报告为空错误。</li>
+      <li>同一种子连续编译两次，指令序列完全一致；采用帧号驱动后，同一帧在整片渲染与跳段重渲两条路径下画面一致。</li>
+      <li>6 个分叉各自在 <code>fork_begin</code> 起 0.5 秒内，两条地形的坡度或断裂差异在画面上可辨认。</li>
+      <li>四种消失模式各至少出现一次，均按预设时长完成，过程中不出现跳帧式突变或地形闪烁。</li>
+      <li>每个分叉结束后，疤痕在后续 5 秒内持续可见；疤痕强度为 3 的节点后存在可辨认的回望镜头。</li>
+      <li>从任意中间帧开始重渲一段，疤痕的可见性、位置与从头渲染完全一致，验证记忆层预烘焙。</li>
+      <li>每个分叉的「未走之路」文字与 <code>fork_begin</code> 出现在同一帧，且文字区域不遮挡两条地形的轮廓。</li>
+      <li>全片相机穿入地形帧数为 0；相机与地表最小间距不触发约束告警。</li>
+      <li>成片为 1080p、24 或 30fps、时长 60–90 秒，可正常播放且首尾无黑帧残留。</li>
+      <li>替换人物数据与种子、不改任何代码，可产出结构完整的第二条片子。</li>
+      <li>修改一个已被引用的元素库预设，不改变已锁定成片的既有画面；新版本仅对新编译生效。</li>
+      <li>构造一份缺字段数据，系统阻断编译并准确指出节点标识与缺失字段，不生成半成品时间轴。</li>
+      <li>面向未看过说明的观众试映，多数人能指出片中至少两处「被删掉的路」；此项记录结果，不作硬性通过线 [TBD]。</li>
+    </ol>
+  </section>
+
+  <!-- ================= 10 ================= -->
+  <section id="s10">
+    <h2><span class="n">10</span>开放问题</h2>
+
+    <div class="q">
+      <div class="qh">叙事授权与史实边界</div>
+      <div class="qb">涉及真实公众人物时，对「未走之路」的假设性描述需要什么程度的依据与授权？是否只做已故人物、是否需要家属沟通、争议节点是否要标注「此为推演」。<strong>该项已升级为编译前置门禁</strong>：口径未确认的人物不进入编译，系统层面不允许「先出片后补授权」。</div>
+    </div>
+
+    <div class="q">
+      <div class="qh">数据源许可与署名</div>
+      <div class="qb">骨架数据来源的许可条款决定成片是否可商用、是否必须署名。当前按可自由使用的知识库设计，但未逐项核对。</div>
+    </div>
+
+    <div class="q">
+      <div class="qh">成片规格口径</div>
+      <div class="qb">60–90 秒、1080p、30fps 为占位目标。若用于竖屏分发，构图、相机侧移幅度、字幕位置都需要另一套规则，不能简单裁切。</div>
+    </div>
+
+    <div class="q">
+      <div class="qh">支线存续时长的依据</div>
+      <div class="qb">2–4 秒来自「够看清差异、又不打断主线」的经验判断，未做观众测试。若试映显示观众来不及辨认，需要上调并相应增加全片时长。</div>
+    </div>
+
+    <div class="q">
+      <div class="qh">元素库的沉淀标准</div>
+      <div class="qb">什么情况下一种消失方式值得沉淀为预设，而不是每条片子单独设计？如果预设过粗，片子会同质化；过细则等于没有复用。这是量产能否成立的关键决策。</div>
+    </div>
+
+    <div class="q">
+      <div class="qh">非公众人物的适用性</div>
+      <div class="qb">普通人物没有公开节点数据，也没有可核对的事实，系统是否仍成立？若成立，叙事判断的权重会进一步上升，可能需要另一套录入形态。</div>
+    </div>
+  </section>
+
+  <footer>
+    <span>地貌删减线 · 动态生成系统 / PRD v1.2</span>
+    <span>P0 范围：单人物 · 8 节点 · 60–90 秒 · 光点 · 结尾根系 · 帧号驱动</span>
+  </footer>
+
+</main>
+</div>
+
+<script>
+(function(){
+  // ---------- TOC active state ----------
+  var links = Array.prototype.slice.call(document.querySelectorAll('#toc a'));
+  var sections = links.map(function(a){ return document.querySelector(a.getAttribute('href')); });
+  function syncToc(){
+    var y = window.scrollY + 120, idx = 0;
+    sections.forEach(function(s,i){ if(s && s.offsetTop <= y) idx = i; });
+    links.forEach(function(a,i){ a.classList.toggle('active', i === idx); });
+  }
+  window.addEventListener('scroll', syncToc, {passive:true});
+  syncToc();
+
+  // ---------- fork timeline demo ----------
+  var svg = document.getElementById('demoSvg');
+  if(!svg) return;
+
+  var branch   = document.getElementById('branch');
+  var branchPath = branch.querySelector('path');
+  var sandDots = document.getElementById('sandDots');
+  var scar     = document.getElementById('scar');
+  var scar2    = document.getElementById('scar2');
+  var playhead = document.getElementById('playhead');
+  var phDot    = document.getElementById('phDot');
+  var ticks    = document.getElementById('ticks');
+
+  var rPhase = document.getElementById('rPhase');
+  var rTime  = document.getElementById('rTime');
+  var rCam   = document.getElementById('rCam');
+  var rScar  = document.getElementById('rScar');
+  var sel    = document.getElementById('modeSel');
+
+  // static ticks: node markers along a 16s loop
+  var nodeTimes = [0.6, 2.2, 3.8, 8.4, 10.0, 13.2, 15.0];
+  nodeTimes.forEach(function(t){
+    var x = (t / 16) * 1000;
+    var l = document.createElementNS('http://www.w3.org/2000/svg','line');
+    l.setAttribute('x1', x); l.setAttribute('x2', x);
+    l.setAttribute('y1', 166); l.setAttribute('y2', 174);
+    l.setAttribute('stroke', '#5b645f'); l.setAttribute('stroke-width', 1);
+    ticks.appendChild(l);
+  });
+
+  // sand particles
+  var dots = [];
+  for(var i=0;i<26;i++){
+    var c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    var px = 6 + Math.random()*128, py = 96 + Math.random()*54;
+    c.setAttribute('cx', px); c.setAttribute('cy', py);
+    c.setAttribute('r', 0.8 + Math.random()*1.4);
+    c.setAttribute('fill', '#cbb489');
+    c.setAttribute('opacity', 0);
+    sandDots.appendChild(c);
+    dots.push({el:c, baseX:px, baseY:py, dx:(Math.random()-0.5)*40, dy:-8-Math.random()*22, ph:Math.random()*6.28});
+  }
+
+  var CFG = {
+    fog:      {dur:3.0, name:'雾化'},
+    sand:     {dur:3.0, name:'风沙'},
+    collapse: {dur:2.5, name:'塌陷'},
+    cover:    {dur:4.0, name:'被覆盖'}
+  };
+
+  var FORK = 4.0;      // 分叉开始
+  var LIVE = 8.0;      // 支线开始消失
+  var LOOP = 16.0;
+
+  function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+
+  var t0 = performance.now();
+  function frame(now){
+    var t = ((now - t0) / 1000) % LOOP;
+    var mode = sel.value;
+    var cfg = CFG[mode];
+    var dissEnd = LIVE + cfg.dur;
+
+    // branch visibility
+    var appear = clamp((t - FORK) / 0.6, 0, 1);
+    var life = clamp((t - LIVE) / cfg.dur, 0, 1);
+
+    var scaleY = 1, opacity = appear;
+
+    if(t < FORK){
+      opacity = 0;
+    } else if(t < LIVE){
+      opacity = appear;
+    } else if(t < dissEnd){
+      if(mode === 'fog'){
+        opacity = (1 - life) * appear;
+      } else if(mode === 'sand'){
+        opacity = (1 - life) * appear;
+        sandDots.setAttribute('opacity', String(Math.min(1, life * 1.4)));
+      } else if(mode === 'collapse'){
+        scaleY = 1 - 0.92 * life;
+        opacity = appear;
+      } else { // cover
+        opacity = appear * (1 - 0.35 * life);
+      }
+    } else {
+      opacity = 0;
+      branch.style.display = 'none';
+    }
+    if(t < dissEnd && branch.style.display === 'none') branch.style.display = '';
+
+    // fog: grow blur slightly by scaling up a touch
+    var blur = (mode === 'fog' && t >= LIVE && t < dissEnd) ? 1 + life*0.8 : 1;
+    branch.style.opacity = String(opacity);
+    branch.style.transform = 'translate(560px,0) scale(' + blur + ',' + (scaleY*blur) + ')';
+    branch.style.transformOrigin = '0px 120px';
+    branch.style.display = opacity <= 0.001 ? 'none' : '';
+
+    if(mode !== 'sand') sandDots.setAttribute('opacity','0');
+
+    // scar
+    var scarOn = t >= dissEnd;
+    var scarA = scarOn ? clamp((t - dissEnd)/0.5, 0, 1) : 0;
+    scar.setAttribute('opacity', String(0.55 * scarA));
+    scar2.setAttribute('opacity', String(0.35 * scarA));
+
+    // playhead
+    var x = (t / LOOP) * 1000;
+    playhead.setAttribute('x1', x); playhead.setAttribute('x2', x);
+    phDot.setAttribute('cx', x);
+
+    // readouts
+    var phase, cam;
+    if(t < FORK){ phase = '主线推进'; cam = '样条推进'; }
+    else if(t < LIVE){ phase = '支线存续'; cam = '侧移 18° / 拉远 1.2×'; }
+    else if(t < dissEnd){
+      phase = '支线消失 · ' + cfg.name;
+      cam = mode === 'collapse' ? '轻微俯视' : '缓速侧持';
+    } else { phase = '疤痕留存'; cam = '回望'; }
+
+    rPhase.textContent = phase;
+    rTime.textContent  = 't = ' + t.toFixed(1) + 's';
+    rCam.textContent   = cam;
+    rScar.textContent  = scarOn ? '已写入 · 强度 3' : '未写入';
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

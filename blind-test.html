@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>盲测 · 地貌表达可读性</title>
+<style>
+  :root{
+    --paper:#f4f1ea; --card:#fffdf8; --ink:#1d211e; --dim:#6c7269; --line:#ddd8cd;
+    --accent:#9a6b25; --ok:#2f6b45; --warn:#a34a34;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    background:var(--paper);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    font-size:15px;line-height:1.7;-webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:920px;margin:0 auto;padding:32px 24px 90px}
+  header{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;
+    border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:26px}
+  h1{font-size:21px;font-weight:600;letter-spacing:-.01em}
+  .sub{font-size:12.5px;color:var(--dim);margin-top:4px}
+  .fac{font-size:12px;color:var(--dim);border:1px solid var(--line);background:var(--card);
+    padding:6px 10px;border-radius:3px;cursor:pointer;white-space:nowrap}
+  .fac:hover{border-color:#c3bcae;color:var(--ink)}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:22px 24px;margin-bottom:18px}
+  .card h2{font-size:15px;font-weight:600;margin-bottom:10px}
+  .card p{font-size:13.5px;color:#4a5049;margin-bottom:10px}
+  .card ul{margin:0 0 4px 18px;font-size:13.5px;color:#4a5049}
+  .card li{margin-bottom:5px}
+  .hint{font-size:12px;color:var(--dim)}
+
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  input[type=text]{border:1px solid var(--line);background:#fff;border-radius:3px;padding:7px 10px;
+    font-size:14px;font-family:inherit;width:140px;color:var(--ink)}
+  button{font-family:inherit;font-size:13.5px;border-radius:3px;padding:8px 16px;cursor:pointer;
+    border:1px solid #cfc8bb;background:#fff;color:var(--ink)}
+  button:hover{border-color:#b5ada0}
+  button.primary{background:#22261f;border-color:#22261f;color:#f7f4ec}
+  button.primary:hover{background:#31372d}
+  button:disabled{opacity:.45;cursor:default}
+
+  .stage{display:none}
+  .stage.on{display:block}
+
+  .clip{position:relative;width:100%;aspect-ratio:16/9;background:#0a0d0c;border-radius:4px;
+    overflow:hidden;border:1px solid #201f1c}
+  .clip iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+  .clipbar{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:12px}
+  .tag{font-family:ui-monospace,Consolas,monospace;font-size:11px;letter-spacing:.12em;color:var(--dim)}
+
+  .q{margin-top:20px;padding-top:16px;border-top:1px solid #ece7dc}
+  .q:first-of-type{border-top:0;padding-top:0}
+  .qt{font-size:14px;font-weight:600;margin-bottom:9px}
+  .qt span{color:var(--dim);font-weight:400;font-size:12.5px}
+  textarea{width:100%;min-height:64px;border:1px solid var(--line);border-radius:3px;background:#fff;
+    padding:9px 11px;font-family:inherit;font-size:13.5px;color:var(--ink);resize:vertical}
+  .opts{display:flex;gap:8px;flex-wrap:wrap}
+  .opt{border:1px solid var(--line);background:#fff;border-radius:3px;padding:6px 14px;
+    font-size:13.5px;cursor:pointer;user-select:none}
+  .opt input{display:none}
+  .opt.sel{border-color:#22261f;background:#22261f;color:#f7f4ec}
+
+  .send{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:22px}
+  .err{color:var(--warn);font-size:12.5px;display:none}
+  .err.on{display:block}
+
+  .done{text-align:center;padding:40px 20px}
+  .done .big{font-size:19px;font-weight:600;margin-bottom:8px}
+  .done p{color:var(--dim);font-size:13.5px}
+
+  /* facilitator */
+  .drawer{position:fixed;top:0;right:0;bottom:0;width:min(520px,100%);background:#fbf8f1;
+    border-left:1px solid var(--line);box-shadow:-12px 0 40px rgba(0,0,0,.08);
+    transform:translateX(102%);transition:transform .28s ease;z-index:30;
+    overflow-y:auto;padding:22px 22px 60px}
+  .drawer.on{transform:none}
+  .drawer h3{font-size:14px;font-weight:600;margin-bottom:6px}
+  .drawer .sec{border-top:1px solid var(--line);padding-top:14px;margin-top:16px}
+  .lock{padding:14px;background:#f1ece1;border:1px dashed #d5cdbd;border-radius:3px;
+    font-size:13px;color:#5d635a;margin-top:10px}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+  th,td{text-align:left;padding:6px 6px;border-bottom:1px solid #e8e1d4;vertical-align:top}
+  th{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);font-weight:500}
+  .verdict{margin-top:10px;padding:12px 14px;border-left:3px solid var(--accent);background:#f6f1e5;
+    font-size:13.5px;line-height:1.65}
+  .verdict b{display:block;margin-bottom:4px}
+  .small{font-size:11.5px;color:var(--dim);line-height:1.7}
+  .kpi{display:flex;gap:10px;margin-top:10px}
+  .kpi div{flex:1;background:#fff;border:1px solid var(--line);border-radius:3px;padding:9px 11px}
+  .kpi span{display:block;font-size:10.5px;letter-spacing:.1em;color:var(--dim);text-transform:uppercase}
+  .kpi b{font-size:19px;font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>盲测 · 地貌表达可读性</h1>
+      <div class="sub">5 位参与者 · 2 个条件 · 同一段地形，唯一变量是有无文字</div>
+    </div>
+    <button class="fac" id="btnFac">主持人面板</button>
+  </header>
+
+  <!-- 0. 准备 -->
+  <section class="stage on" id="stSetup">
+    <div class="card">
+      <h2>主持人请先看这一页</h2>
+      <p>本测试只回答一个问题：<b>不依赖文字时，观众能不能自己看出「有一条路被删掉了」。</b></p>
+      <ul>
+        <li>口述指令只说：请看完这段画面，然后回答四个问题，可以重看。</li>
+        <li>不要解释「地貌删减线」「岔路」「疤痕」这些词，也不要提示画面里有几处消失。</li>
+        <li>每位参与者单独进行，不要互相讨论。全程约 3 分钟。</li>
+      </ul>
+      <p class="hint">两段画面的差别只有字幕，观看顺序由系统随机分配。</p>
+    </div>
+    <div class="card">
+      <h2>开始一位参与者</h2>
+      <div class="row">
+        <input type="text" id="pid" placeholder="参与者编号">
+        <button class="primary" id="btnStart">开始</button>
+        <span class="hint" id="cntHint">已记录 0 位</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 1. 观看 + 作答 -->
+  <section class="stage" id="stRun">
+    <div class="card">
+      <div class="clip"><iframe id="frame" title="片段"></iframe></div>
+      <div class="clipbar">
+        <span class="tag" id="tag">片段 1 / 2 · 约 14 秒</span>
+        <button id="btnReplay">重播</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="q">
+        <div class="qt">1. 用一句话描述你刚才看到的画面。 <span>可留空</span></div>
+        <textarea id="q1" placeholder="例如：镜头在一个山谷上移动，地形中间鼓起来一块，后来塌下去了"></textarea>
+      </div>
+      <div class="q">
+        <div class="qt">2. 地形里有没有出现「多出来一块、随后又消失」的部分？</div>
+        <div class="opts" data-q="q2">
+          <label class="opt"><input type="radio" name="q2" value="有">有</label>
+          <label class="opt"><input type="radio" name="q2" value="没有">没有</label>
+          <label class="opt"><input type="radio" name="q2" value="不确定">不确定</label>
+        </div>
+      </div>
+      <div class="q">
+        <div class="qt">3. 如果那块地形代表一个「没有发生过的选择」，你能自己看出来吗？</div>
+        <div class="opts" data-q="q3">
+          <label class="opt"><input type="radio" name="q3" value="能">能</label>
+          <label class="opt"><input type="radio" name="q3" value="不能">不能</label>
+          <label class="opt"><input type="radio" name="q3" value="说不清">说不清</label>
+        </div>
+      </div>
+      <div class="q">
+        <div class="qt">4. 要理解这段画面在讲什么，你觉得还需要什么？ <span>可多选</span></div>
+        <div class="opts" data-q="q4" data-multi="1">
+          <label class="opt"><input type="checkbox" name="q4" value="不需要">不需要，画面已经说清</label>
+          <label class="opt"><input type="checkbox" name="q4" value="文字">文字说明</label>
+          <label class="opt"><input type="checkbox" name="q4" value="旁白">旁白</label>
+          <label class="opt"><input type="checkbox" name="q4" value="更长镜头">更长的镜头</label>
+        </div>
+      </div>
+
+      <div class="send">
+        <span class="err" id="err">第 2、3 题需要选一个答案</span>
+        <button class="primary" id="btnSubmit">提交并继续</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. 完成 -->
+  <section class="stage" id="stDone">
+    <div class="card done">
+      <div class="big">这一位完成了</div>
+      <p>请把电脑交回主持人，不要讨论刚才的画面。</p>
+      <div style="margin-top:18px"><button id="btnNext">下一位参与者</button></div>
+    </div>
+  </section>
+</div>
+
+<!-- 主持人面板 -->
+<div class="drawer" id="drawer">
+  <h3>主持人面板</h3>
+  <div class="small">满 5 位参与者后解锁汇总，避免中途看到结果影响提问方式。</div>
+
+  <div class="sec">
+    <div class="kpi">
+      <div><span>已完成</span><b id="kDone">0</b></div>
+      <div><span>记录条数</span><b id="kRows">0</b></div>
+    </div>
+  </div>
+
+  <div class="sec">
+    <h3>汇总与判定</h3>
+    <div id="lockBox" class="lock">尚未满 5 位参与者，汇总暂不显示。</div>
+    <div id="resultBox" style="display:none">
+      <div class="kpi">
+        <div><span>A · 无文字可读</span><b id="kA">0</b></div>
+        <div><span>B · 有文字可读</span><b id="kB">0</b></div>
+      </div>
+      <table id="tbl">
+        <thead><tr><th>参与者</th><th>顺序</th><th>A 发现/看懂</th><th>B 发现/看懂</th><th>备注</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="verdict" id="verdict"></div>
+    </div>
+    <div class="small" style="margin-top:10px">
+      可读 = 第 2 题选「有」且第 3 题选「能」。判定口径：A ≥ 3/5 则文字层可降级；A ≤ 1/5 且 B ≥ 3/5 则文字层确认 P0。
+    </div>
+  </div>
+
+  <div class="sec">
+    <div class="row">
+      <button id="btnCsv">导出 CSV</button>
+      <button id="btnClear">清空记录</button>
+      <button id="btnHide">收起</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+const KEY = "md_blind_v1";
+const CLIP = { t0: 51, t1: 63 };
+const NEED = 5;
+
+const $ = s => document.querySelector(s);
+const stages = { setup:$("#stSetup"), run:$("#stRun"), done:$("#stDone") };
+
+let state = { pid:"", order:[], round:0, busy:false };
+
+function rows(){ try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch(e){ return []; } }
+function save(all){ localStorage.setItem(KEY, JSON.stringify(all)); }
+function participants(){
+  const set = new Set(rows().map(r=>r.pid));
+  return Array.from(set);
+}
+function completedParticipants(){
+  const by = {};
+  rows().forEach(r=>{ (by[r.pid] = by[r.pid] || []).push(r); });
+  return Object.keys(by).filter(p=>{
+    const conds = by[p].map(r=>r.cond);
+    return conds.indexOf("A") >= 0 && conds.indexOf("B") >= 0;
+  });
+}
+
+function show(name){
+  Object.keys(stages).forEach(k=> stages[k].classList.toggle("on", k===name));
+  window.scrollTo(0,0);
+}
+
+function defaultPid(){
+  const n = participants().length + 1;
+  return "P" + String(n).padStart(2,"0");
+}
+
+function refreshHint(){
+  const doneN = completedParticipants().length;
+  $("#cntHint").textContent = "已完成 " + doneN + " 位";
+  $("#kDone").textContent = doneN;
+  $("#kRows").textContent = rows().length;
+  $("#pid").value = defaultPid();
+}
+
+/* ---------- 开始一位 ---------- */
+$("#btnStart").addEventListener("click", ()=>{
+  const pid = ($("#pid").value || "").trim() || defaultPid();
+  state.pid = pid;
+  state.order = Math.random() < 0.5 ? ["A","B"] : ["B","A"];
+  state.round = 0;
+  loadRound();
+  show("run");
+});
+
+function loadRound(){
+  const cond = state.order[state.round];
+  const src = "index.html?embed=1&t0=" + CLIP.t0 + "&t1=" + CLIP.t1 +
+              "&nocap=" + (cond === "A" ? "1" : "0") + "&v=" + Date.now();
+  $("#frame").src = src;
+  $("#tag").textContent = "片段 " + (state.round+1) + " / 2 · 约 14 秒";
+  $("#btnSubmit").textContent = state.round === 0 ? "提交并看第二段" : "提交并结束";
+  $("#err").classList.remove("on");
+  $("#q1").value = "";
+  document.querySelectorAll(".opts .opt").forEach(o=> o.classList.remove("sel"));
+  document.querySelectorAll(".opts input").forEach(i=> i.checked = false);
+}
+
+/* ---------- 选项交互 ---------- */
+document.querySelectorAll(".opts").forEach(group=>{
+  const multi = group.dataset.multi === "1";
+  group.addEventListener("click", e=>{
+    const label = e.target.closest(".opt");
+    if(!label) return;
+    const input = label.querySelector("input");
+    if(multi){
+      setTimeout(()=> label.classList.toggle("sel", input.checked), 0);
+    } else {
+      group.querySelectorAll(".opt").forEach(o=> o.classList.remove("sel"));
+      label.classList.add("sel");
+    }
+  });
+});
+
+$("#btnReplay").addEventListener("click", ()=>{
+  const cond = state.order[state.round];
+  $("#frame").src = "index.html?embed=1&t0=" + CLIP.t0 + "&t1=" + CLIP.t1 +
+    "&nocap=" + (cond === "A" ? "1" : "0") + "&v=" + Date.now();
+});
+
+/* ---------- 提交 ---------- */
+$("#btnSubmit").addEventListener("click", ()=>{
+  if(state.busy) return;
+  const q2 = (document.querySelector('input[name="q2"]:checked')||{}).value || "";
+  const q3 = (document.querySelector('input[name="q3"]:checked')||{}).value || "";
+  if(!q2 || !q3){ $("#err").classList.add("on"); return; }
+
+  const q4 = Array.from(document.querySelectorAll('input[name="q4"]:checked')).map(i=>i.value).join("|");
+  const row = {
+    pid: state.pid,
+    round: state.round + 1,
+    cond: state.order[state.round],
+    q1: ($("#q1").value || "").trim(),
+    q2, q3, q4,
+    ts: new Date().toISOString()
+  };
+  const all = rows(); all.push(row); save(all);
+
+  if(state.round === 0){
+    state.round = 1;
+    loadRound();
+    window.scrollTo(0,0);
+  } else {
+    refreshHint();
+    show("done");
+  }
+});
+
+$("#btnNext").addEventListener("click", ()=>{
+  refreshHint();
+  show("setup");
+});
+
+/* ---------- 主持人面板 ---------- */
+$("#btnFac").addEventListener("click", ()=>{ $("#drawer").classList.add("on"); renderPanel(); });
+$("#btnHide").addEventListener("click", ()=> $("#drawer").classList.remove("on"));
+
+function readable(r){ return r.q2 === "有" && r.q3 === "能"; }
+
+function renderPanel(){
+  refreshHint();
+  const done = completedParticipants();
+  const unlock = done.length >= NEED;
+  $("#lockBox").style.display = unlock ? "none" : "block";
+  $("#resultBox").style.display = unlock ? "block" : "none";
+  $("#lockBox").textContent = "已收集 " + done.length + " / " + NEED + " 位参与者，满 " + NEED + " 位后显示汇总。";
+  if(!unlock) return;
+
+  const all = rows();
+  const by = {};
+  all.forEach(r=>{ (by[r.pid] = by[r.pid] || []).push(r); });
+
+  let aRead = 0, bRead = 0;
+  const tbody = $("#tbl tbody");
+  tbody.innerHTML = "";
+  done.forEach(pid=>{
+    const rs = by[pid];
+    const A = rs.find(r=>r.cond === "A"), B = rs.find(r=>r.cond === "B");
+    if(readable(A)) aRead++;
+    if(readable(B)) bRead++;
+    const order = rs.slice().sort((x,y)=> x.round - y.round).map(r=>r.cond).join("→");
+    const note = [A && A.q1 ? "A:" + A.q1 : "", B && B.q1 ? "B:" + B.q1 : ""].filter(Boolean).join(" / ");
+    const tr = document.createElement("tr");
+    tr.innerHTML = "<td>"+pid+"</td><td>"+order+"</td>"+
+      "<td>"+(A? (A.q2+" / "+A.q3) : "—")+"</td>"+
+      "<td>"+(B? (B.q2+" / "+B.q3) : "—")+"</td>"+
+      "<td style='max-width:180px;color:#6c7269'>"+note+"</td>";
+    tbody.appendChild(tr);
+  });
+
+  $("#kA").textContent = aRead + " / " + done.length;
+  $("#kB").textContent = bRead + " / " + done.length;
+
+  let v;
+  if(aRead >= 3){
+    v = "<b>文字层可降级为 P1</b>无文字条件下多数人已能读出「被删掉的路」，画面本身说得通，文字只作补充。";
+  } else if(bRead >= 3 && aRead <= 1){
+    v = "<b>文字层确认 P0</b>没有文字时几乎无人读懂，加上文字后可读；说明叙事语义目前完全依赖文字承载，地形只是情绪。";
+  } else {
+    v = "<b>结果混合，暂不下结论</b>两条件差距不显著。建议扩样到 10 人，或先改地形语言（加强支线对比、延长消失窗口）再测。";
+  }
+  $("#verdict").innerHTML = v;
+}
+
+$("#btnCsv").addEventListener("click", ()=>{
+  const all = rows();
+  if(!all.length){ alert("还没有记录"); return; }
+  const head = ["participant","round","condition","q1_desc","q2_noticed","q3_interpreted","q4_needs","timestamp"];
+  const esc = v => '"' + String(v==null?"":v).replace(/"/g,'""') + '"';
+  const lines = [head.join(",")].concat(all.map(r=> [r.pid,r.round,r.cond,r.q1,r.q2,r.q3,r.q4,r.ts].map(esc).join(",")));
+  const blob = new Blob(["\ufeff" + lines.join("\r\n")], {type:"text/csv;charset=utf-8"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "blind-test_results.csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(a.href), 3000);
+});
+
+$("#btnClear").addEventListener("click", ()=>{
+  if(!confirm("清空全部盲测记录？此操作不可撤销。")) return;
+  localStorage.removeItem(KEY);
+  renderPanel();
+  refreshHint();
+});
+
+/* ---------- 初始化 ---------- */
+refreshHint();
+})();
+</script>
+</body>
+</html>
